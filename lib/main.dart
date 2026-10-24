@@ -140,6 +140,15 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       return;
     }
 
+    final youtubeId = youtubeVideoId(uri.toString());
+    if (youtubeId != null) {
+      _showMessage(
+        'YouTube video recognized (ID: $youtubeId), but direct video extraction '
+        'is not supported yet. Paste a direct media-file URL instead.',
+      );
+      return;
+    }
+
     await _historyInitialization;
     setState(() => _choosingLocation = true);
     try {
@@ -431,7 +440,7 @@ class _SourceLink extends StatelessWidget {
           child: Tooltip(
             message: url,
             child: SelectableText(
-              displayDownloadUri(url),
+              downloadSourceLabel(url),
               maxLines: 2,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
