@@ -1,4 +1,5 @@
 import 'package:download_beast/main.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -7,6 +8,18 @@ void main() {
 
     expect(find.text('Download Beast'), findsOneWidget);
     expect(find.text('Add a download'), findsOneWidget);
+    expect(find.text('No downloads yet'), findsOneWidget);
+  });
+
+  testWidgets('rejects non-HTTP URLs without opening the save picker',
+      (tester) async {
+    await tester.pumpWidget(const DownloadBeastApp());
+
+    await tester.enterText(find.byType(TextField), 'file:///private/file.txt');
+    await tester.tap(find.widgetWithText(FilledButton, 'Download'));
+    await tester.pump();
+
+    expect(find.text('Enter a valid HTTP or HTTPS URL.'), findsOneWidget);
     expect(find.text('No downloads yet'), findsOneWidget);
   });
 }
