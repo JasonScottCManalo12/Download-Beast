@@ -1,0 +1,50 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Windows runner scaffolding
+        shell: pwsh
+        run: |
+          flutter create --platforms=windows --project-name download_beast bootstrap
+          Copy-Item -Path bootstrap/windows -Destination windows -Recurse
+          Remove-Item bootstrap -Recurse -Force
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze source
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: download-beast-windows
+          path: build/windows/x64/runner/Release/
+          if-no-files-found: error
