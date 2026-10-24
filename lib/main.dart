@@ -368,21 +368,26 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                           Row(
                             children: [
                               Expanded(
-                                child: TextField(
-                                  controller: _urlController,
-                                  keyboardType: TextInputType.url,
-                                  textInputAction: TextInputAction.go,
-                                  onSubmitted: (_) => _addDownload(),
-                                  decoration: const InputDecoration(
-                                    hintText: 'https://example.com/file.zip',
-                                    labelText: 'Download URL',
-                                    prefixIcon: Icon(Icons.link),
-                                    border: OutlineInputBorder(),
+                                child: Semantics(
+                                  label: 'Download URL',
+                                  textField: true,
+                                  child: TextField(
+                                    controller: _urlController,
+                                    keyboardType: TextInputType.url,
+                                    textInputAction: TextInputAction.go,
+                                    onSubmitted: (_) => _addDownload(),
+                                    decoration: const InputDecoration(
+                                      hintText: 'https://example.com/file.zip',
+                                      labelText: 'Download URL',
+                                      prefixIcon: Icon(Icons.link),
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               FilledButton.icon(
+                                key: const ValueKey('download-action'),
                                 onPressed:
                                     _choosingLocation ? null : _addDownload,
                                 icon: _choosingLocation
