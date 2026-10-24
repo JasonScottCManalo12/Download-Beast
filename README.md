@@ -20,7 +20,7 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 
 - [x] **Core download engine:** HTTP/HTTPS downloads, URL validation, save-location selection, progress, cancellation, and status handling
 - [x] **Automated tests:** successful download and content verification, HTTP 404 handling, cancellation cleanup, and widget validation
-- [x] **Continuous integration:** GitHub Actions analysis and tests pass on the verified cancellation-fix branch
+- [x] **Continuous integration:** GitHub Actions analysis, tests, and Windows release build/package upload pass on `main`
 - [x] **Windows release build:** release compilation and artifact upload succeeded
 - [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
 - [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
@@ -29,15 +29,16 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 8 usability fixes:** readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
 - [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
 - [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
-- [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
+- [ ] **Milestone 10 — Reliable retry and recovery:** scope finalized in [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7); implement test-first, with explicit user-triggered retries and safe Range/ETag resume or restart
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest verified post-merge CI run for Milestone 9: [Run #80](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40133565044), passed Flutter analysis/tests and the Windows release build/package upload on `main`.
+Latest verified CI run on `main`: [Run #81](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40135123180), passed Flutter analysis/tests and the Windows release build/package upload. Milestone 10 retry/recovery is planned but not implemented.
 
 ## Not implemented yet
 
 - Segmented or multi-connection downloads
-- Retry scheduling and bandwidth limits
+- Explicit retry/recovery improvements (Milestone 10, planned; see [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7))
+- Bandwidth limits
 - Checksum verification
 - Browser extension integration
 - Signed installer
