@@ -51,7 +51,7 @@ class DownloadJob {
   bool _cancelRequested = false;
 
   double? get progress =>
-      totalBytes > 0 ? (receivedBytes / totalBytes).clamp(0.0, 1.0) : null;
+      totalBytes > 0 ? (receivedBytes / totalBytes).clamp(0.0, 1.0).toDouble() : null;
 
   void cancel() {
     if (status != DownloadStatus.downloading) return;
@@ -172,6 +172,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       setState(() {
         _jobs.insert(0, job);
         _urlController.clear();
+        _choosingLocation = false;
       });
       await job.start();
     } catch (_) {
