@@ -14,12 +14,16 @@ void main() {
   final heldResponses = <Completer<void>>[];
   final rangeRequestHeaders = <String>[];
   var rangeRouteCount = 0;
+  var flakyRouteCount = 0;
+  var missingRouteCount = 0;
 
   setUp(() async {
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_test_');
     slowResponseFlushed = Completer<void>();
     rangeRequestHeaders.clear();
     rangeRouteCount = 0;
+    flakyRouteCount = 0;
+    missingRouteCount = 0;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       if (request.uri.path == '/range-payload' ||
@@ -70,7 +74,28 @@ void main() {
         }
         return;
       }
+      if (request.uri.path == '/always-unavailable') {
+        request.response.statusCode = HttpStatus.serviceUnavailable;
+        request.response.write('Temporarily unavailable');
+        await request.response.close();
+        return;
+      }
+      if (request.uri.path == '/flaky') {
+        flakyRouteCount++;
+        if (flakyRouteCount == 1) {
+          request.response.statusCode = HttpStatus.serviceUnavailable;
+          request.response.write('Temporary server failure');
+          await request.response.close();
+          return;
+        }
+        final bytes = utf8.encode('Recovered after retry');
+        request.response.headers.contentLength = bytes.length;
+        request.response.add(bytes);
+        await request.response.close();
+        return;
+      }
       if (request.uri.path == '/missing') {
+        missingRouteCount++;
         request.response.statusCode = HttpStatus.notFound;
         request.response.write('Not found');
         await request.response.close();
@@ -351,4 +376,61 @@ void main() {
     expect(job.status, DownloadStatus.cancelled);
     expect(await File(destination).exists(), isFalse);
   });
+
+  test('does not retry a transient server failure until the user requests retry', () async {
+    final destination = '${tempDirectory.path}/retry.txt';
+    final job = DownloadJob(
+      url: url('/flaky'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('503'));
+    expect(flakyRouteCount, 1);
+    expect(await File(destination).exists(), isFalse);
+
+    await job.retry();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(flakyRouteCount, 2);
+    expect(await File(destination).readAsString(), 'Recovered after retry');
+  });
+
+  test('failed HTTP 404 stays failed without automatic retry', () async {
+    final destination = '${tempDirectory.path}/not-retryable.txt';
+    final job = DownloadJob(
+      url: url('/missing'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('404'));
+    expect(missingRouteCount, 1);
+    expect(await File(destination).exists(), isFalse);
+  });
+
+  test('retry after repeated transient failures requires one explicit action per attempt', () async {
+    final destination = '${tempDirectory.path}/retry-once.txt';
+    final job = DownloadJob(
+      url: url('/always-unavailable'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('503'));
+
+    await job.retry();
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('503'));
+    expect(await File(destination).exists(), isFalse);
+  });
+
 }

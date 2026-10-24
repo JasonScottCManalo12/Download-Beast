@@ -29,15 +29,15 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 8 usability fixes:** readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
 - [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
 - [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
-- [ ] **Milestone 10 — Reliable retry and recovery:** scope finalized in [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7); implement test-first, with explicit user-triggered retries and safe Range/ETag resume or restart
+- [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest verified CI run on `main`: [Run #81](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40135123180), passed Flutter analysis/tests and the Windows release build/package upload. Milestone 10 retry/recovery is planned but not implemented.
+Latest verified feature-branch CI run: [Run #88](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40138004306), passed Flutter analysis/tests and the Windows release build/package upload. The user confirmed all Milestone 10 smoke-test checks passed; merge is pending.
 
 ## Not implemented yet
 
 - Segmented or multi-connection downloads
-- Explicit retry/recovery improvements (Milestone 10, planned; see [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7))
+- Automatic retry scheduling (not implemented; Milestone 10 uses explicit user-triggered attempts)
 - Bandwidth limits
 - Checksum verification
 - Browser extension integration
@@ -49,7 +49,7 @@ This is an initial development build, not yet a production replacement for Inter
 
 Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
 
-Manual Windows verification for Milestone 9 is user-confirmed complete: the user reported all five smoke-test checks passed, including app launch, direct download, pause/resume and file integrity, cancellation/cleanup, and history after restart.
+Manual Windows verification is user-confirmed complete for Milestones 9 and 10. For Milestone 10, the user reported all smoke-test checks passed, including retry success, retry after app restart, non-retryable error messaging, file integrity, and pause/resume/cancellation checks.
 
 ## Development
 

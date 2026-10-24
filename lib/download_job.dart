@@ -65,6 +65,19 @@ class DownloadJob {
     await start();
   }
 
+  /// Starts exactly one new attempt after a failed download.
+  /// No retry loop runs in the background; the user triggers each attempt.
+  Future<void> retry() async {
+    if (status != DownloadStatus.failed || _cancelRequested) return;
+    status = DownloadStatus.downloading;
+    receivedBytes = 0;
+    totalBytes = -1;
+    entityTag = null;
+    errorMessage = null;
+    onChanged();
+    await start();
+  }
+
   Future<void> start() {
     final active = _activeRun;
     if (active != null) return active;
