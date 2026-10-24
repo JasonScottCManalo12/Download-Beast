@@ -5,17 +5,71 @@ import 'dart:io';
 import 'package:download_beast/download_job.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+final _rangePayload = List<int>.generate(256 * 1024, (index) => index % 251);
+
 void main() {
   late HttpServer server;
   late Directory tempDirectory;
   late Completer<void> slowResponseFlushed;
   final heldResponses = <Completer<void>>[];
+  final rangeRequestHeaders = <String>[];
+  var rangeRouteCount = 0;
 
   setUp(() async {
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_test_');
     slowResponseFlushed = Completer<void>();
+    rangeRequestHeaders.clear();
+    rangeRouteCount = 0;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      if (request.uri.path == '/range-payload' ||
+          request.uri.path == '/ignore-range' ||
+          request.uri.path == '/bad-range' ||
+          request.uri.path == '/changed-etag') {
+        final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+        rangeRequestHeaders.add(rangeHeader ?? '');
+        final honorRange = request.uri.path != '/ignore-range';
+        var start = 0;
+        if (honorRange && rangeHeader != null) {
+          final match = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
+          if (match != null) start = int.parse(match.group(1)!);
+        }
+        final routeNumber = ++rangeRouteCount;
+        request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+        final responseEtag = request.uri.path == '/changed-etag' && routeNumber > 1
+            ? '"fixture-v2"'
+            : '"fixture-v1"';
+        request.response.headers.set(HttpHeaders.etagHeader, responseEtag);
+        if (start > 0) {
+          request.response.statusCode = HttpStatus.partialContent;
+          request.response.headers.set(
+            HttpHeaders.contentRangeHeader,
+            'bytes ${request.uri.path == '/bad-range' ? start + 1 : start}-${_rangePayload.length - 1}/${_rangePayload.length}',
+          );
+        }
+        request.response.contentLength = _rangePayload.length - start;
+        request.response.bufferOutput = false;
+        for (var offset = start; offset < _rangePayload.length; offset += 8192) {
+          final end = (offset + 8192 < _rangePayload.length)
+              ? offset + 8192
+              : _rangePayload.length;
+          request.response.add(_rangePayload.sublist(offset, end));
+          await request.response.flush();
+          if (offset == start && routeNumber == 1) {
+            final hold = Completer<void>();
+            heldResponses.add(hold);
+            await hold.future;
+          }
+        }
+        try {
+          await request.response.close();
+        } on HttpException {
+          // A paused client may have closed this response.
+        } on SocketException {
+          // A paused client may have closed this response.
+        }
+        return;
+      }
       if (request.uri.path == '/missing') {
         request.response.statusCode = HttpStatus.notFound;
         request.response.write('Not found');
@@ -65,6 +119,122 @@ void main() {
   Uri url(String path) =>
       Uri.parse('http://${server.address.address}:${server.port}$path');
 
+  test('pause preserves partial bytes and resume completes with HTTP Range', () async {
+    final destination = '${tempDirectory.path}/range-payload.bin';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/range-payload'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+
+    final initialRun = job.start();
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    await job.pause();
+    await initialRun.timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.paused);
+    expect(await File(destination).exists(), isTrue);
+    final savedBytes = await File(destination).length();
+    expect(savedBytes, greaterThan(0));
+    expect(savedBytes, lessThan(job.totalBytes));
+
+    for (final hold in heldResponses) {
+      if (!hold.isCompleted) hold.complete();
+    }
+    await job.resume().timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.completed);
+    expect(await File(destination).readAsBytes(), _rangePayload);
+    expect(rangeRequestHeaders, contains('bytes=$savedBytes-'));
+  });
+
+  test('resume restarts safely when server ignores Range', () async {
+    final destination = '${tempDirectory.path}/ignore-range.bin';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/ignore-range'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+
+    final initialRun = job.start();
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    await job.pause();
+    await initialRun.timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.paused);
+    for (final hold in heldResponses) {
+      if (!hold.isCompleted) hold.complete();
+    }
+    await job.resume().timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.completed);
+    expect(await File(destination).readAsBytes(), _rangePayload);
+  });
+
+  test('rejects a mismatched Content-Range without preserving corrupted output', () async {
+    final destination = '${tempDirectory.path}/bad-range.bin';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/bad-range'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+    final initialRun = job.start();
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    await job.pause();
+    await initialRun.timeout(const Duration(seconds: 10));
+    for (final hold in heldResponses) {
+      if (!hold.isCompleted) hold.complete();
+    }
+    await job.resume().timeout(const Duration(seconds: 10));
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('Content-Range'));
+    expect(await File(destination).exists(), isFalse);
+  });
+
+  test('rejects a changed ETag on resume', () async {
+    final destination = '${tempDirectory.path}/changed-etag.bin';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/changed-etag'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+    final initialRun = job.start();
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    await job.pause();
+    await initialRun.timeout(const Duration(seconds: 10));
+    expect(job.entityTag, '"fixture-v1"');
+    for (final hold in heldResponses) {
+      if (!hold.isCompleted) hold.complete();
+    }
+    await job.resume().timeout(const Duration(seconds: 10));
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('remote file changed'));
+    expect(await File(destination).exists(), isFalse);
+  });
   test('downloads a file and reports completed progress', () async {
     final destination = '${tempDirectory.path}/payload.txt';
     var changeCount = 0;

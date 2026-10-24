@@ -15,6 +15,7 @@ class DownloadHistoryRecord {
     required this.createdAt,
     required this.updatedAt,
     this.errorMessage,
+    this.etag,
   });
 
   final int? id;
@@ -24,6 +25,7 @@ class DownloadHistoryRecord {
   final int receivedBytes;
   final int totalBytes;
   final String? errorMessage;
+  final String? etag;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -36,6 +38,8 @@ class DownloadHistoryRecord {
     int? totalBytes,
     String? errorMessage,
     bool clearErrorMessage = false,
+    String? etag,
+    bool clearEtag = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -47,6 +51,7 @@ class DownloadHistoryRecord {
       receivedBytes: receivedBytes ?? this.receivedBytes,
       totalBytes: totalBytes ?? this.totalBytes,
       errorMessage: clearErrorMessage ? null : errorMessage ?? this.errorMessage,
+      etag: clearEtag ? null : etag ?? this.etag,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -59,6 +64,7 @@ class DownloadHistoryRecord {
         'received_bytes': receivedBytes,
         'total_bytes': totalBytes,
         'error_message': errorMessage,
+        'etag': etag,
         'created_at': createdAt.millisecondsSinceEpoch,
         'updated_at': updatedAt.millisecondsSinceEpoch,
       };
@@ -72,6 +78,7 @@ class DownloadHistoryRecord {
       receivedBytes: map['received_bytes'] as int,
       totalBytes: map['total_bytes'] as int,
       errorMessage: map['error_message'] as String?,
+      etag: map['etag'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
     );
@@ -100,7 +107,7 @@ class DownloadHistoryStore {
     final database = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onCreate: (db, version) async {
           await db.execute('''
             CREATE TABLE download_history (
@@ -111,6 +118,7 @@ class DownloadHistoryStore {
               received_bytes INTEGER NOT NULL DEFAULT 0,
               total_bytes INTEGER NOT NULL DEFAULT -1,
               error_message TEXT,
+              etag TEXT,
               created_at INTEGER NOT NULL,
               updated_at INTEGER NOT NULL
             )
@@ -119,6 +127,11 @@ class DownloadHistoryStore {
             'CREATE INDEX idx_download_history_updated_at '
             'ON download_history(updated_at DESC)',
           );
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await db.execute('ALTER TABLE download_history ADD COLUMN etag TEXT');
+          }
         },
       ),
     );

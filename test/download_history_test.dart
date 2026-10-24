@@ -27,6 +27,7 @@ void main() {
     int receivedBytes = 0,
     int totalBytes = -1,
     String? errorMessage,
+    String? etag,
   }) {
     final now = DateTime.now();
     return DownloadHistoryRecord(
@@ -36,13 +37,19 @@ void main() {
       receivedBytes: receivedBytes,
       totalBytes: totalBytes,
       errorMessage: errorMessage,
+      etag: etag,
       createdAt: now,
       updatedAt: now,
     );
   }
 
   test('persists a record after the database is closed and reopened', () async {
-    final original = record(status: 'completed', receivedBytes: 120, totalBytes: 120);
+    final original = record(
+      status: 'completed',
+      receivedBytes: 120,
+      totalBytes: 120,
+      etag: '"fixture-v1"',
+    );
     final id = await store.insert(original);
     await store.close();
 
@@ -56,6 +63,7 @@ void main() {
     expect(records.single.status, 'completed');
     expect(records.single.receivedBytes, 120);
     expect(records.single.totalBytes, 120);
+    expect(records.single.etag, '"fixture-v1"');
   });
 
   test('updates status, progress, error details, and updated timestamp', () async {

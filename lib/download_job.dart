@@ -3,97 +3,191 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-enum DownloadStatus { downloading, completed, failed, cancelled }
+enum DownloadStatus { downloading, paused, completed, failed, cancelled }
 
 class DownloadJob {
   DownloadJob({
     required this.url,
     required this.destinationPath,
     required this.onChanged,
-  }) {
-    _client.connectionTimeout = const Duration(seconds: 20);
-    _client.idleTimeout = const Duration(seconds: 30);
-    _client.userAgent = 'DownloadBeast/0.1';
-  }
+  });
 
   final Uri url;
   final String destinationPath;
   final VoidCallback onChanged;
-
-  /// Database row for this download, assigned by the history store.
   int? historyId;
 
-  final HttpClient _client = HttpClient();
+  HttpClient? _client;
+  Future<void>? _activeRun;
+  bool _cancelRequested = false;
+  bool _pauseRequested = false;
+  String? entityTag;
+
   DownloadStatus status = DownloadStatus.downloading;
   int receivedBytes = 0;
   int totalBytes = -1;
   String? errorMessage;
-  bool _cancelRequested = false;
 
   double? get progress => totalBytes > 0
       ? (receivedBytes / totalBytes).clamp(0.0, 1.0).toDouble()
       : null;
 
   void cancel() {
-    if (status != DownloadStatus.downloading || _cancelRequested) return;
+    if ((status != DownloadStatus.downloading &&
+            status != DownloadStatus.paused) ||
+        _cancelRequested) {
+      return;
+    }
+    final wasPaused = status == DownloadStatus.paused;
     _cancelRequested = true;
-    _client.close(force: true);
+    _client?.close(force: true);
+    if (wasPaused) {
+      status = DownloadStatus.cancelled;
+      unawaited(_deletePartialFile(File(destinationPath)).then((_) {
+        receivedBytes = 0;
+        onChanged();
+      }));
+    }
     onChanged();
   }
 
-  Future<void> start() async {
+  Future<void> pause() async {
+    if (status != DownloadStatus.downloading || _cancelRequested) return;
+    _pauseRequested = true;
+    _client?.close(force: true);
+    final running = _activeRun;
+    if (running != null) await running;
+  }
+
+  Future<void> resume() async {
+    if (status != DownloadStatus.paused || _cancelRequested) return;
+    _pauseRequested = false;
+    await start();
+  }
+
+  Future<void> start() {
+    final active = _activeRun;
+    if (active != null) return active;
+    if (_cancelRequested || status == DownloadStatus.completed) {
+      return Future<void>.value();
+    }
+    final running = _run();
+    _activeRun = running;
+    return running;
+  }
+
+  Future<void> _run() async {
     IOSink? sink;
     final output = File(destinationPath);
     try {
       if (_cancelRequested) throw const _DownloadCancelled();
+      if (_pauseRequested) throw const _DownloadPaused();
 
-      final request = await _client.getUrl(url);
+      final existingBytes = await output.exists() ? await output.length() : 0;
+      receivedBytes = existingBytes;
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 20)
+        ..idleTimeout = const Duration(seconds: 30)
+        ..userAgent = 'DownloadBeast/0.1';
+      _client = client;
+
+      final request = await client.getUrl(url);
+      if (existingBytes > 0) {
+        request.headers.set(HttpHeaders.rangeHeader, 'bytes=$existingBytes-');
+        if (entityTag != null) request.headers.set(HttpHeaders.ifRangeHeader, entityTag!);
+      }
       if (_cancelRequested) throw const _DownloadCancelled();
+      if (_pauseRequested) throw const _DownloadPaused();
 
       final response = await request.close();
       if (_cancelRequested) throw const _DownloadCancelled();
+      if (_pauseRequested) throw const _DownloadPaused();
 
-      if (response.statusCode < 200 || response.statusCode >= 300) {
+      var append = false;
+      if (response.statusCode == HttpStatus.partialContent) {
+        final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
+        final match = contentRange == null
+            ? null
+            : RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(contentRange);
+        if (existingBytes <= 0 || match == null) {
+          await response.drain<void>();
+          throw const HttpException('Server returned an invalid Content-Range.');
+        }
+        final start = int.parse(match.group(1)!);
+        final end = int.parse(match.group(2)!);
+        final total = int.parse(match.group(3)!);
+        if (start != existingBytes ||
+            end < start ||
+            end >= total ||
+            (response.contentLength >= 0 &&
+                response.contentLength != end - start + 1)) {
+          await response.drain<void>();
+          throw const HttpException('Server returned a mismatched Content-Range.');
+        }
+        final responseEtag = response.headers.value(HttpHeaders.etagHeader);
+        if (entityTag != null && responseEtag != entityTag) {
+          await response.drain<void>();
+          throw const HttpException('The remote file changed; resume was rejected.');
+        }
+        totalBytes = total;
+        append = true;
+      } else if (response.statusCode == HttpStatus.ok) {
+        // A server that ignores Range must never be appended to a partial file.
+        receivedBytes = 0;
+        totalBytes = response.contentLength;
+      } else {
         await response.drain<void>();
         throw HttpException('Server returned HTTP ${response.statusCode}.');
       }
 
-      totalBytes = response.contentLength;
-      sink = output.openWrite(mode: FileMode.write);
+      entityTag = response.headers.value(HttpHeaders.etagHeader) ?? entityTag;
+      sink = output.openWrite(mode: append ? FileMode.append : FileMode.write);
       await for (final chunk in response) {
         if (_cancelRequested) throw const _DownloadCancelled();
+        if (_pauseRequested) throw const _DownloadPaused();
         sink.add(chunk);
         receivedBytes += chunk.length;
         onChanged();
       }
       if (_cancelRequested) throw const _DownloadCancelled();
+      if (_pauseRequested) throw const _DownloadPaused();
 
       await sink.flush();
       await sink.close();
       sink = null;
-
-      if (_cancelRequested) {
-        status = DownloadStatus.cancelled;
-        await _deletePartialFile(output);
-      } else {
-        status = DownloadStatus.completed;
-      }
+      status = DownloadStatus.completed;
+      errorMessage = null;
+    } on _DownloadPaused {
+      await _closeSinkQuietly(sink);
+      sink = null;
+      if (await output.exists()) receivedBytes = await output.length();
+      status = DownloadStatus.paused;
     } on _DownloadCancelled {
       status = DownloadStatus.cancelled;
       await _closeSinkQuietly(sink);
+      sink = null;
       await _deletePartialFile(output);
+      receivedBytes = 0;
     } catch (error) {
       await _closeSinkQuietly(sink);
+      sink = null;
       if (_cancelRequested) {
         status = DownloadStatus.cancelled;
         await _deletePartialFile(output);
+        receivedBytes = 0;
+      } else if (_pauseRequested) {
+        if (await output.exists()) receivedBytes = await output.length();
+        status = DownloadStatus.paused;
       } else {
         status = DownloadStatus.failed;
         errorMessage = _describeError(error);
         await _deletePartialFile(output);
+        receivedBytes = 0;
       }
     } finally {
-      _client.close(force: true);
+      _client?.close(force: true);
+      _client = null;
+      _activeRun = null;
       onChanged();
     }
   }
@@ -137,4 +231,8 @@ class DownloadJob {
 
 class _DownloadCancelled implements Exception {
   const _DownloadCancelled();
+}
+
+class _DownloadPaused implements Exception {
+  const _DownloadPaused();
 }
