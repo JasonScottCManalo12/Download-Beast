@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'file_identity.dart';
+import 'youtube_metadata.dart';
 
 import 'download_job.dart';
 import 'download_history.dart';
@@ -542,29 +543,48 @@ class _HistoryCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    '$status · ${_formatBytes(record.receivedBytes)}'
-                    '${record.totalBytes > 0 ? ' / ${_formatBytes(record.totalBytes)}' : ''}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
                   _SourceLink(url: record.url),
-                  if (record.errorMessage != null)
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 4,
+                    children: [
+                      Text(status),
+                      Text(_formatBytes(record.receivedBytes)),
+                      if (record.totalBytes > 0)
+                        Text('of ${_formatBytes(record.totalBytes)}'),
+                      Text(_formatDate(record.updatedAt)),
+                    ],
+                  ),
+                  if (record.errorMessage != null) ...[
+                    const SizedBox(height: 4),
                     Text(
                       record.errorMessage!,
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
+                  ],
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${record.updatedAt.toLocal()}'.split('.').first,
-              style: Theme.of(context).textTheme.labelSmall,
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  String _formatDate(DateTime value) {
+    final local = value.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 }
 
@@ -576,103 +596,87 @@ class _DownloadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusText = switch (job.status) {
+    final filename = job.destinationPath.split(Platform.pathSeparator).last;
+    final status = switch (job.status) {
       DownloadStatus.downloading => 'Downloading',
       DownloadStatus.completed => 'Completed',
       DownloadStatus.failed => 'Failed',
       DownloadStatus.cancelled => 'Cancelled',
     };
-    final color = switch (job.status) {
-      DownloadStatus.completed => Colors.green,
-      DownloadStatus.failed => Theme.of(context).colorScheme.error,
-      DownloadStatus.cancelled => Theme.of(context).colorScheme.onSurfaceVariant,
-      DownloadStatus.downloading => Theme.of(context).colorScheme.primary,
-    };
+    final progress = job.totalBytes > 0
+        ? (job.receivedBytes / job.totalBytes).clamp(0.0, 1.0)
+        : null;
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.insert_drive_file_outlined, size: 30, color: color),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          job.destinationPath.split(Platform.pathSeparator).last,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(fileTypeLabel(job.destinationPath.split(Platform.pathSeparator).last)),
-                        padding: EdgeInsets.zero,
-                      ),
-                    ],
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    filename,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  Tooltip(
-                    message: job.destinationPath,
-                    child: SelectableText(
-                      'Saved to: ${job.destinationPath}',
-                      maxLines: 2,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  _SourceLink(url: job.url.toString()),
-                  Text(
-                    '$statusText · ${_formatBytes(job.receivedBytes)}'
-                    '${job.totalBytes > 0 ? ' / ${_formatBytes(job.totalBytes)}' : ''}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (job.status == DownloadStatus.downloading) ...[
-                    const SizedBox(height: 10),
-                    LinearProgressIndicator(value: job.progress),
-                  ],
-                  if (job.errorMessage != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      job.errorMessage!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  ],
-                ],
+                ),
+                const SizedBox(width: 8),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(fileTypeLabel(filename)),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+            Tooltip(
+              message: job.destinationPath,
+              child: SelectableText(
+                'Saved to: ${job.destinationPath}',
+                maxLines: 2,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-            if (job.status == DownloadStatus.downloading)
-              IconButton(
-                tooltip: 'Cancel download',
-                onPressed: onCancel,
-                icon: const Icon(Icons.close),
-              )
-            else
-              Icon(
-                job.status == DownloadStatus.completed
-                    ? Icons.check_circle_outline
-                    : job.status == DownloadStatus.failed
-                        ? Icons.error_outline
-                        : Icons.cancel_outlined,
-                color: color,
+            const SizedBox(height: 4),
+            _SourceLink(url: job.url.toString()),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(value: progress),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    progress == null
+                        ? '$status · ${_formatBytes(job.receivedBytes)}'
+                        : '$status · ${_formatBytes(job.receivedBytes)} of ${_formatBytes(job.totalBytes)}',
+                  ),
+                ),
+                if (job.status == DownloadStatus.downloading)
+                  TextButton.icon(
+                    onPressed: onCancel,
+                    icon: const Icon(Icons.close),
+                    label: const Text('Cancel'),
+                  ),
+              ],
+            ),
+            if (job.errorMessage != null)
+              Text(
+                job.errorMessage!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
           ],
         ),
       ),
     );
   }
-}
 
-String _formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }
