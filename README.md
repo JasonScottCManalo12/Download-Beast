@@ -27,7 +27,7 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Merge verified changes into `main`:** merged via [PR #2](https://github.com/JasonScottCManalo12/Download-Beast/pull/2); merge commit `fcfaff0fd3f7bdb7f3220af36f44bfa0ea13a58a`
 - [ ] **Persistent download history (Milestone 8, in progress):** SQLite-backed records for URLs, destinations, statuses, progress, errors, and timestamps; restore recent history on startup and mark stale active records interrupted
 - [ ] **Milestone 8 usability fixes:** show readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
-- [ ] **YouTube video identification:** recognize common YouTube video URLs and display the video ID; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
+- [ ] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
 - [ ] **Pause/resume:** use HTTP Range support when the server allows it
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
@@ -37,6 +37,7 @@ Latest CI run before this documentation update: [Run #22](https://github.com/Jas
 ## Not implemented yet
 
 - Download history is being implemented on branch `feature/sqlite-download-history`; regression tests cover database reopen persistence, status/progress updates, interrupted-download recovery, recent ordering, file-type labels, readable source links, and YouTube video URL identification
+- YouTube title resolution is implemented as best-effort public oEmbed metadata lookup, with the video ID retained as the fallback when metadata is unavailable
 - Pause and resume
 - Segmented or multi-connection downloads
 - Retry scheduling and bandwidth limits
