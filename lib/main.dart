@@ -706,6 +706,12 @@ class _HistoryCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (onResume != null)
+              IconButton(
+                tooltip: 'Resume paused download',
+                onPressed: onResume,
+                icon: const Icon(Icons.play_arrow),
+              ),
           ],
         ),
       ),
