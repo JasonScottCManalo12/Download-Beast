@@ -25,7 +25,9 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
 - [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
 - [x] **Merge verified changes into `main`:** merged via [PR #2](https://github.com/JasonScottCManalo12/Download-Beast/pull/2); merge commit `fcfaff0fd3f7bdb7f3220af36f44bfa0ea13a58a`
-- [ ] **Persistent download history:** SQLite-backed history and safe restart recovery
+- [x] **Persistent download history (Milestone 8, operational):** SQLite-backed records for URLs, destinations, statuses, progress, errors, and timestamps; restore recent history on startup and mark stale active records interrupted
+- [x] **Milestone 8 usability fixes:** readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
+- [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
 - [ ] **Pause/resume:** use HTTP Range support when the server allows it
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
@@ -34,7 +36,8 @@ Latest CI run before this documentation update: [Run #22](https://github.com/Jas
 
 ## Not implemented yet
 
-- Persistent download history / SQLite
+- Milestone 8 is operational on branch `feature/sqlite-download-history`. Regression tests cover database reopen persistence, status/progress updates, interrupted-download recovery, recent ordering, file-type labels, readable source links, and YouTube video URL identification. The user confirmed operational status; actual YouTube media extraction remains out of scope.
+- YouTube title resolution is implemented as best-effort public oEmbed metadata lookup, with the video ID retained as the fallback when metadata is unavailable
 - Pause and resume
 - Segmented or multi-connection downloads
 - Retry scheduling and bandwidth limits
