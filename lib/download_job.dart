@@ -111,7 +111,7 @@ class DownloadJob {
             : RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(contentRange);
         if (existingBytes <= 0 || match == null) {
           await response.drain<void>();
-          throw HttpException('Server returned an invalid Content-Range.');
+          throw const HttpException('Server returned an invalid Content-Range.');
         }
         final start = int.parse(match.group(1)!);
         final end = int.parse(match.group(2)!);
@@ -122,12 +122,12 @@ class DownloadJob {
             (response.contentLength >= 0 &&
                 response.contentLength != end - start + 1)) {
           await response.drain<void>();
-          throw HttpException('Server returned a mismatched Content-Range.');
+          throw const HttpException('Server returned a mismatched Content-Range.');
         }
         final responseEtag = response.headers.value(HttpHeaders.etagHeader);
         if (_etag != null && responseEtag != null && responseEtag != _etag) {
           await response.drain<void>();
-          throw HttpException('The remote file changed; resume was rejected.');
+          throw const HttpException('The remote file changed; resume was rejected.');
         }
         totalBytes = total;
         append = true;
@@ -206,7 +206,7 @@ class DownloadJob {
     if (error is TimeoutException) {
       return 'Connection timed out. Check your internet connection or try again.';
     }
-    return 'Unexpected download error: ${error}';
+    return 'Unexpected download error: $error';
   }
 
   Future<void> _closeSinkQuietly(IOSink? sink) async {
