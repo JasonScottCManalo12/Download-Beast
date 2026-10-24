@@ -65,6 +65,70 @@ void main() {
   Uri url(String path) =>
       Uri.parse('http://${server.address.address}:${server.port}$path');
 
+  test('pause preserves partial bytes and resume completes with HTTP Range', () async {
+    final destination = '${tempDirectory.path}/range-payload.bin';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/range-payload'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+
+    final initialRun = job.start();
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    await job.pause();
+    await initialRun.timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.paused);
+    expect(await File(destination).exists(), isTrue);
+    final savedBytes = await File(destination).length();
+    expect(savedBytes, greaterThan(0));
+    expect(savedBytes, lessThan(job.totalBytes));
+
+    for (final hold in heldResponses) {
+      if (!hold.isCompleted) hold.complete();
+    }
+    await job.resume().timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.completed);
+    expect(await File(destination).readAsBytes(), _rangePayload);
+    expect(rangeRequestHeaders, contains('bytes=$savedBytes-'));
+  });
+
+  test('resume restarts safely when server ignores Range', () async {
+    final destination = '${tempDirectory.path}/ignore-range.bin';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/ignore-range'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+
+    final initialRun = job.start();
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    await job.pause();
+    await initialRun.timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.paused);
+    for (final hold in heldResponses) {
+      if (!hold.isCompleted) hold.complete();
+    }
+    await job.resume().timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.completed);
+    expect(await File(destination).readAsBytes(), _rangePayload);
+  });
+
   test('downloads a file and reports completed progress', () async {
     final destination = '${tempDirectory.path}/payload.txt';
     var changeCount = 0;
