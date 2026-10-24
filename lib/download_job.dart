@@ -23,6 +23,9 @@ class DownloadJob {
   bool _pauseRequested = false;
   String? _etag;
 
+  String? get entityTag => _etag;
+  set entityTag(String? value) => _etag = value;
+
   DownloadStatus status = DownloadStatus.downloading;
   int receivedBytes = 0;
   int totalBytes = -1;
@@ -125,7 +128,7 @@ class DownloadJob {
           throw const HttpException('Server returned a mismatched Content-Range.');
         }
         final responseEtag = response.headers.value(HttpHeaders.etagHeader);
-        if (_etag != null && responseEtag != null && responseEtag != _etag) {
+        if (_etag != null && responseEtag != _etag) {
           await response.drain<void>();
           throw const HttpException('The remote file changed; resume was rejected.');
         }
