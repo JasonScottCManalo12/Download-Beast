@@ -13,7 +13,24 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - Per-download completed, failed, and cancelled states
 - Automated local-HTTP tests for successful downloads, HTTP 404 handling, and cancellation cleanup
 - Widget tests for the dashboard and rejection of non-HTTP URLs
-- Windows build, static analysis, and test workflow in GitHub Actions
+- GitHub Actions workflow for analysis, tests, and Windows release builds
+- Windows release package names the main executable `Download Beast.exe` and includes the supporting runtime files
+
+## Milestone checklist
+
+- [x] **Core download engine:** HTTP/HTTPS downloads, URL validation, save-location selection, progress, cancellation, and status handling
+- [x] **Automated tests:** successful download and content verification, HTTP 404 handling, cancellation cleanup, and widget validation
+- [x] **Continuous integration:** GitHub Actions analysis and tests pass on the verified cancellation-fix branch
+- [x] **Windows release build:** release compilation and artifact upload succeeded
+- [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
+- [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
+- [ ] **Merge verified changes into `main`:** packaging branch is still separate; no pull request is currently recorded
+- [ ] **Persistent download history:** SQLite-backed history and safe restart recovery
+- [ ] **Pause/resume:** use HTTP Range support when the server allows it
+- [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
+- [ ] **Release polish:** installer/signing, accessibility, and additional platform support
+
+Latest verified CI run: [Run #20](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40114862402). The user has now confirmed manual Windows launch/dashboard and download/cancellation tests are good. CI success and manual verification are separate checklist items.
 
 ## Not implemented yet
 
@@ -23,9 +40,15 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - Retry scheduling and bandwidth limits
 - Checksum verification
 - Browser extension integration
-- Signed installer and release packaging
+- Signed installer
 
 This is an initial development build, not yet a production replacement for Internet Download Manager. Test downloads with files you are authorized to retrieve. Servers may block downloads, require authentication, or omit progress metadata.
+
+## Windows build package
+
+Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
+
+Manual Windows verification is complete for the current build: the user confirmed the app opens and the download and cancellation tests are good.
 
 ## Development
 
@@ -39,13 +62,4 @@ flutter test
 flutter run -d windows
 ```
 
-The GitHub Actions workflow generates the Windows runner scaffolding during CI, then analyzes, tests, and builds the release app.
-
-## Roadmap
-
-1. Add automated download behavior tests and validate the initial Windows flow (in progress; CI tests cover local HTTP success, 404 errors, and cancellation).
-2. Manually smoke-test the Windows executable on a real Windows PC.
-3. Add persistent history and safe restart recovery.
-4. Add robust pause/resume using HTTP range support when available.
-5. Add bounded segmented downloading, retries, and checksum validation.
-6. Improve packaging, accessibility, and cross-platform support.
+The GitHub Actions workflow generates the Windows runner scaffolding during CI, then analyzes, tests, builds the release app, renames the main executable, and uploads the release folder as an artifact.

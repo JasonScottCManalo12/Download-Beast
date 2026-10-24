@@ -66,10 +66,23 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release
 
-      - name: Upload Windows application
+      - name: Name Windows executable
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          $exe = Join-Path $releaseDir "download_beast.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Expected Flutter executable not found: $exe"
+          }
+          Rename-Item -Path $exe -NewName "Download Beast.exe"
+          if (-not (Test-Path (Join-Path $releaseDir "Download Beast.exe"))) {
+            throw "Renamed executable was not found."
+          }
+
+      - name: Upload Windows application package
         uses: actions/upload-artifact@v4
         with:
-          name: download-beast-windows
+          name: Download-Beast-Windows
           path: build/windows/x64/runner/Release/
           if-no-files-found: error
           retention-days: 14
