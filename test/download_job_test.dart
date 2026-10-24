@@ -29,7 +29,7 @@ void main() {
         final honorRange = request.uri.path == '/range-payload';
         var start = 0;
         if (honorRange && rangeHeader != null) {
-          final match = RegExp(r'^bytes=(\d+)-.firstMatch(rangeHeader);
+          final match = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
           if (match != null) start = int.parse(match.group(1)!);
         }
         final routeNumber = ++rangeRouteCount;
