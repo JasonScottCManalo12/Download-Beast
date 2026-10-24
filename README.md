@@ -11,7 +11,9 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - Live byte count and progress indicator when the server provides a content length
 - Cancel active downloads
 - Per-download completed, failed, and cancelled states
-- Windows build, static analysis, and widget-test workflow in GitHub Actions
+- Automated local-HTTP tests for successful downloads, HTTP 404 handling, and cancellation cleanup
+- Widget tests for the dashboard and rejection of non-HTTP URLs
+- Windows build, static analysis, and test workflow in GitHub Actions
 
 ## Not implemented yet
 
@@ -41,8 +43,9 @@ The GitHub Actions workflow generates the Windows runner scaffolding during CI, 
 
 ## Roadmap
 
-1. Verify the initial Windows build and download flow.
-2. Add persistent history and safe restart recovery.
-3. Add robust pause/resume using HTTP range support when available.
-4. Add bounded segmented downloading, retries, and checksum validation.
-5. Improve packaging, accessibility, and cross-platform support.
+1. Add automated download behavior tests and validate the initial Windows flow (in progress; CI tests cover local HTTP success, 404 errors, and cancellation).
+2. Manually smoke-test the Windows executable on a real Windows PC.
+3. Add persistent history and safe restart recovery.
+4. Add robust pause/resume using HTTP range support when available.
+5. Add bounded segmented downloading, retries, and checksum validation.
+6. Improve packaging, accessibility, and cross-platform support.
