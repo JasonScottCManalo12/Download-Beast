@@ -33,9 +33,21 @@ class DownloadJob {
       : null;
 
   void cancel() {
-    if (status != DownloadStatus.downloading || _cancelRequested) return;
+    if ((status != DownloadStatus.downloading &&
+            status != DownloadStatus.paused) ||
+        _cancelRequested) {
+      return;
+    }
+    final wasPaused = status == DownloadStatus.paused;
     _cancelRequested = true;
     _client?.close(force: true);
+    if (wasPaused) {
+      status = DownloadStatus.cancelled;
+      unawaited(_deletePartialFile(File(destinationPath)).then((_) {
+        receivedBytes = 0;
+        onChanged();
+      }));
+    }
     onChanged();
   }
 
