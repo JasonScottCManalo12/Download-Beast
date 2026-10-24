@@ -1,4 +1,4 @@
-name: Windows build
+name: Download Beast CI
 
 on:
   push:
@@ -10,9 +10,39 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: download-beast-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  verify:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze source
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
   build-windows:
+    name: Build Windows release
     runs-on: windows-latest
+    needs: verify
+    timeout-minutes: 40
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -33,12 +63,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze source
-        run: flutter analyze
-
-      - name: Run tests
-        run: flutter test
-
       - name: Build Windows release
         run: flutter build windows --release
 
@@ -48,3 +72,4 @@ jobs:
           name: download-beast-windows
           path: build/windows/x64/runner/Release/
           if-no-files-found: error
+          retention-days: 14
