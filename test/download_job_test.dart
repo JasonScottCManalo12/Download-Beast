@@ -8,10 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late HttpServer server;
   late Directory tempDirectory;
+  late Completer<void> slowResponseFlushed;
   final heldResponses = <Completer<void>>[];
 
   setUp(() async {
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_test_');
+    slowResponseFlushed = Completer<void>();
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       if (request.uri.path == '/missing') {
@@ -25,8 +27,14 @@ void main() {
         final hold = Completer<void>();
         heldResponses.add(hold);
         request.response.headers.contentType = ContentType.text;
+        // Keep the response open after the first chunk so the client has a
+        // deterministic opportunity to cancel an active transfer.
+        request.response.headers.contentLength = 1024 * 1024;
         request.response.add(utf8.encode('partial-data'));
         await request.response.flush();
+        if (!slowResponseFlushed.isCompleted) {
+          slowResponseFlushed.complete();
+        }
         await hold.future;
         try {
           await request.response.close();
@@ -49,6 +57,7 @@ void main() {
     for (final hold in heldResponses) {
       if (!hold.isCompleted) hold.complete();
     }
+    heldResponses.clear();
     await server.close(force: true);
     if (await tempDirectory.exists()) {
       await tempDirectory.delete(recursive: true);
@@ -107,9 +116,12 @@ void main() {
     );
 
     final running = job.start();
-    await firstChunkReceived.future.timeout(const Duration(seconds: 3));
+    // Wait for the test server to flush its first chunk before waiting for
+    // the download engine to report that it has written that chunk.
+    await slowResponseFlushed.future.timeout(const Duration(seconds: 10));
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
     job.cancel();
-    await running.timeout(const Duration(seconds: 3));
+    await running.timeout(const Duration(seconds: 10));
 
     expect(job.status, DownloadStatus.cancelled);
     expect(await File(destination).exists(), isFalse);
