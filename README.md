@@ -27,9 +27,10 @@ This is an initial development build, not yet a production replacement for Inter
 
 ## Development
 
-Requires Flutter stable with Windows desktop support and Visual Studio's C++ desktop build tools.
+Requires Flutter stable with Windows desktop support and Visual Studio's C++ desktop build tools. The Windows runner scaffold is generated in CI; run the first command below once after cloning to generate it locally.
 
 ```powershell
+flutter create --platforms=windows .
 flutter pub get
 flutter analyze
 flutter test
