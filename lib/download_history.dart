@@ -142,6 +142,24 @@ class DownloadHistoryStore {
     );
   }
 
+  /// Marks downloads left active by a previous process as interrupted.
+  ///
+  /// This records a truthful state after a crash or forced close; it does not
+  /// claim that an incomplete file can be resumed.
+  Future<int> markActiveDownloadsInterrupted() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return _database.update(
+      'download_history',
+      {
+        'status': 'interrupted',
+        'error_message': 'App closed before the download finished.',
+        'updated_at': now,
+      },
+      where: 'status = ?',
+      whereArgs: ['downloading'],
+    );
+  }
+
   Future<List<DownloadHistoryRecord>> listRecent({int limit = 100}) async {
     final rows = await _database.query(
       'download_history',
