@@ -26,11 +26,11 @@ void main() {
       if (request.uri.path == '/slow') {
         final hold = Completer<void>();
         heldResponses.add(hold);
+        request.response.bufferOutput = false;
         request.response.headers.contentType = ContentType.text;
-        // Keep the response open after the first chunk so the client has a
-        // deterministic opportunity to cancel an active transfer.
-        request.response.headers.contentLength = 1024 * 1024;
-        request.response.add(utf8.encode('partial-data'));
+        // Use chunked transfer and a sizeable first chunk. Keeping the
+        // response open gives the test a reliable active transfer to cancel.
+        request.response.add(List<int>.filled(64 * 1024, 65));
         await request.response.flush();
         if (!slowResponseFlushed.isCompleted) {
           slowResponseFlushed.complete();
@@ -116,8 +116,6 @@ void main() {
     );
 
     final running = job.start();
-    // Wait for the test server to flush its first chunk before waiting for
-    // the download engine to report that it has written that chunk.
     await slowResponseFlushed.future.timeout(const Duration(seconds: 10));
     await firstChunkReceived.future.timeout(const Duration(seconds: 10));
     job.cancel();
