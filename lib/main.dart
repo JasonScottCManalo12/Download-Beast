@@ -103,7 +103,8 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       ..historyId = record.id
       ..status = DownloadStatus.paused
       ..receivedBytes = record.receivedBytes
-      ..totalBytes = record.totalBytes;
+      ..totalBytes = record.totalBytes
+      ..entityTag = record.etag;
     setState(() => _jobs.insert(0, job));
     await job.resume();
   }
@@ -120,6 +121,8 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       totalBytes: job.totalBytes,
       errorMessage: job.errorMessage,
       clearErrorMessage: job.errorMessage == null,
+      etag: job.entityTag,
+      clearEtag: job.entityTag == null,
       updatedAt: DateTime.now(),
     );
     _persistenceChain = _persistenceChain.then((_) async {
