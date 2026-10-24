@@ -22,15 +22,15 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Automated tests:** successful download and content verification, HTTP 404 handling, cancellation cleanup, and widget validation
 - [x] **Continuous integration:** GitHub Actions analysis and tests pass on the verified cancellation-fix branch
 - [x] **Windows release build:** release compilation and artifact upload succeeded
-- [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder; successful run #17
-- [ ] **Manual Windows verification:** download/extract the artifact, launch the app, and test a real download and cancellation
+- [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
+- [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
 - [ ] **Merge verified changes into `main`:** packaging branch is still separate; no pull request is currently recorded
 - [ ] **Persistent download history:** SQLite-backed history and safe restart recovery
 - [ ] **Pause/resume:** use HTTP Range support when the server allows it
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest verified packaging workflow: [Run #17](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40112724416). CI success verifies the build and packaging steps, not that the executable has been manually launched. The Windows artifact is retained until November 7, 2026.
+Latest verified CI run: [Run #20](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40114862402). The user has now confirmed manual Windows launch/dashboard and download/cancellation tests are good. CI success and manual verification are separate checklist items.
 
 ## Not implemented yet
 
@@ -48,7 +48,7 @@ This is an initial development build, not yet a production replacement for Inter
 
 Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
 
-The package has not been manually smoke-tested on a separate Windows PC yet.
+Manual Windows verification is complete for the current build: the user confirmed the app opens and the download and cancellation tests are good.
 
 ## Development
 
