@@ -32,11 +32,10 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest CI run before this documentation update: [Run #22](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40116942870), passed analysis/tests and Windows release build. The merged commit triggers a fresh workflow on `main`. The user confirmed manual Windows launch/dashboard and download/cancellation tests are good.
+Latest verified post-merge CI run: [Run #57](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40126753680), passed Flutter analysis/tests and the Windows release build/package upload on `main`.
 
 ## Not implemented yet
 
-- Milestone 8 is operational on branch `feature/sqlite-download-history`. Regression tests cover database reopen persistence, status/progress updates, interrupted-download recovery, recent ordering, file-type labels, readable source links, and YouTube video URL identification. The user confirmed operational status; actual YouTube media extraction remains out of scope.
 - YouTube title resolution is implemented as best-effort public oEmbed metadata lookup, with the video ID retained as the fallback when metadata is unavailable
 - Pause and resume
 - Segmented or multi-connection downloads
