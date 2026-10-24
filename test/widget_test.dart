@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:download_beast/download_history.dart';
 import 'package:download_beast/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,7 +36,13 @@ void main() {
   testWidgets('shows actionable guidance when the save-location picker fails',
       (tester) async {
     final pickerCalled = Completer<void>();
+    // Use a deterministic in-memory store so this test does not depend on the
+    // host platform's application-support-directory plugin.
+    final historyStore = await DownloadHistoryStore.open(
+      databasePath: ':memory:',
+    );
     await tester.pumpWidget(DownloadBeastApp(
+      historyStore: historyStore,
       saveLocationPicker: (_) async {
         if (!pickerCalled.isCompleted) pickerCalled.complete();
         throw Exception('Access denied');
