@@ -458,7 +458,7 @@ class _SourceLink extends StatelessWidget {
               ? null
               : () async {
                   final opened = await launchUrl(
-                    uri,
+                    uri!,
                     mode: LaunchMode.externalApplication,
                   );
                   if (!opened && context.mounted) {
