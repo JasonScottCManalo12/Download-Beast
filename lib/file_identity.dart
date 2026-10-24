@@ -64,3 +64,40 @@ String displayDownloadUri(String rawUrl) {
   final queryMarker = uri.hasQuery ? '?…' : '';
   return '${uri.host}$path$queryMarker';
 }
+
+/// Returns the video ID for common YouTube watch, short, embed, and live URLs.
+String? youtubeVideoId(String rawUrl) {
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null) return null;
+  final host = uri.host.toLowerCase();
+  if (host != 'youtube.com' &&
+      host != 'www.youtube.com' &&
+      host != 'm.youtube.com' &&
+      host != 'music.youtube.com' &&
+      host != 'youtu.be' &&
+      host != 'www.youtu.be' &&
+      host != 'youtube-nocookie.com' &&
+      host != 'www.youtube-nocookie.com') {
+    return null;
+  }
+
+  String? id;
+  if (host == 'youtu.be' || host == 'www.youtu.be') {
+    id = uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+  } else if (uri.path == '/watch') {
+    id = uri.queryParameters['v'];
+  } else if (uri.pathSegments.length >= 2 &&
+      const {'shorts', 'embed', 'live', 'v'}.contains(uri.pathSegments.first)) {
+    id = uri.pathSegments[1];
+  }
+  if (id == null || !RegExp(r'^[A-Za-z0-9_-]{6,}$').hasMatch(id)) return null;
+  return id;
+}
+
+/// Human-readable source identity. This does not imply that the source is
+/// directly downloadable as a media file.
+String downloadSourceLabel(String rawUrl) {
+  final videoId = youtubeVideoId(rawUrl);
+  if (videoId != null) return 'YouTube video · ID $videoId';
+  return displayDownloadUri(rawUrl);
+}
