@@ -24,13 +24,13 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Windows release build:** release compilation and artifact upload succeeded
 - [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
 - [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
-- [ ] **Merge verified changes into `main`:** packaging branch is still separate; no pull request is currently recorded
+- [x] **Merge verified changes into `main`:** merged via [PR #2](https://github.com/JasonScottCManalo12/Download-Beast/pull/2); merge commit `fcfaff0fd3f7bdb7f3220af36f44bfa0ea13a58a`
 - [ ] **Persistent download history:** SQLite-backed history and safe restart recovery
 - [ ] **Pause/resume:** use HTTP Range support when the server allows it
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest verified CI run: [Run #20](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40114862402). The user has now confirmed manual Windows launch/dashboard and download/cancellation tests are good. CI success and manual verification are separate checklist items.
+Latest CI run before this documentation update: [Run #22](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40116942870), passed analysis/tests and Windows release build. The merged commit triggers a fresh workflow on `main`. The user confirmed manual Windows launch/dashboard and download/cancellation tests are good.
 
 ## Not implemented yet
 
