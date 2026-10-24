@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'file_identity.dart';
@@ -458,7 +459,7 @@ class _SourceLink extends StatelessWidget {
               ? null
               : () async {
                   final opened = await launchUrl(
-                    uri!,
+                    uri,
                     mode: LaunchMode.externalApplication,
                   );
                   if (!opened && context.mounted) {
