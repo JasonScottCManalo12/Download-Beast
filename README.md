@@ -28,15 +28,14 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Persistent download history (Milestone 8, operational):** SQLite-backed records for URLs, destinations, statuses, progress, errors, and timestamps; restore recent history on startup and mark stale active records interrupted
 - [x] **Milestone 8 usability fixes:** readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
 - [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
-- [ ] **Pause/resume:** use HTTP Range support when the server allows it
+- [ ] **Milestone 9 — Pause/resume downloads:** test-first implementation tracked in [issue #5](https://github.com/JasonScottCManalo12/Download-Beast/issues/5); validate HTTP Range and Content-Range behavior, preserve file integrity, and persist pause/resume state
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest verified post-merge CI run: [Run #57](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40126753680), passed Flutter analysis/tests and the Windows release build/package upload on `main`.
+Latest verified CI run: [Run #58](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40127489041), passed Flutter analysis/tests and the Windows release build/package upload on `main`.
 
 ## Not implemented yet
 
-- YouTube title resolution is implemented as best-effort public oEmbed metadata lookup, with the video ID retained as the fallback when metadata is unavailable
 - Pause and resume
 - Segmented or multi-connection downloads
 - Retry scheduling and bandwidth limits
