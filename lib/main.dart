@@ -100,7 +100,7 @@ Future<String?> fetchYoutubeTitle(String rawUrl) async {
     final body = await response.transform(const SystemEncoding().decoder).join();
     client.close();
     if (response.statusCode != 200) return null;
-    final match = RegExp(r'"title"\s*:\s*"((?:\\.|[^"\\])*)"').firstMatch(body);
+    final match = RegExp(r'\"title\"\s*:\s*\"((?:\\.|[^\"\\])*)\"').firstMatch(body);
     return match == null ? null : match.group(1);
   } catch (_) {
     return null;
