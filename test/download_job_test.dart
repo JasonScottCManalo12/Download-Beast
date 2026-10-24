@@ -95,28 +95,23 @@ void main() {
   test('cancels an active download and removes the partial file', () async {
     final destination = '${tempDirectory.path}/partial.txt';
     final firstChunkReceived = Completer<void>();
-    final job = DownloadJob(
+    late final DownloadJob job;
+    job = DownloadJob(
       url: url('/slow'),
       destinationPath: destination,
       onChanged: () {
-        if (jobBytesReceivedPlaceholder) {}
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
       },
     );
-    // Replace the callback's observation with a separate polling-free signal.
-    // The job invokes onChanged after accepting each response chunk.
-    final observedJob = job;
-    final running = observedJob.start();
-    // Wait for the first chunk to be recorded by the job.
-    while (observedJob.receivedBytes == 0) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-      if (firstChunkReceived.isCompleted) break;
-      firstChunkReceived.complete();
-    }
+
+    final running = job.start();
     await firstChunkReceived.future.timeout(const Duration(seconds: 3));
-    observedJob.cancel();
+    job.cancel();
     await running.timeout(const Duration(seconds: 3));
 
-    expect(observedJob.status, DownloadStatus.cancelled);
+    expect(job.status, DownloadStatus.cancelled);
     expect(await File(destination).exists(), isFalse);
   });
 }
