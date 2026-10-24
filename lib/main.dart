@@ -30,10 +30,7 @@ class DownloadBeastApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: seed),
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF7F6FA),
-        cardTheme: const CardThemeData(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-        ),
+        cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
       ),
       home: DownloadHomePage(historyStore: historyStore),
     );
@@ -42,9 +39,7 @@ class DownloadBeastApp extends StatelessWidget {
 
 class DownloadHomePage extends StatefulWidget {
   const DownloadHomePage({super.key, this.historyStore});
-
   final DownloadHistoryStore? historyStore;
-
   @override
   State<DownloadHomePage> createState() => _DownloadHomePageState();
 }
@@ -73,9 +68,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       final records = await _historyStore!.listRecent();
       if (!mounted) return;
       setState(() {
-        _historyRecords
-          ..clear()
-          ..addAll(records);
+        _historyRecords..clear()..addAll(records);
         _historyError = null;
       });
     } catch (error) {
@@ -111,9 +104,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
           if (row >= 0) _historyRecords[row] = updated;
         });
       } catch (error) {
-        if (mounted) {
-          setState(() => _historyError = 'Could not update download history: $error');
-        }
+        if (mounted) setState(() => _historyError = 'Could not update download history: $error');
       }
     });
   }
@@ -122,9 +113,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   void dispose() {
     _urlController.dispose();
     final store = _historyStore;
-    if (store != null) {
-      _persistenceChain = _persistenceChain.then((_) => store.close());
-    }
+    if (store != null) _persistenceChain = _persistenceChain.then((_) => store.close());
     for (final job in _jobs) {
       job.cancel();
     }
@@ -134,29 +123,21 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   Future<void> _addDownload() async {
     final rawUrl = _urlController.text.trim();
     final uri = Uri.tryParse(rawUrl);
-    if (uri == null ||
-        !uri.hasAuthority ||
-        (uri.scheme != 'http' && uri.scheme != 'https')) {
+    if (uri == null || !uri.hasAuthority || (uri.scheme != 'http' && uri.scheme != 'https')) {
       _showMessage('Enter a valid HTTP or HTTPS URL.');
       return;
     }
-
     final youtubeId = youtubeVideoId(uri.toString());
     if (youtubeId != null) {
-      _showMessage(
-        'YouTube video recognized (ID: $youtubeId), but direct video extraction '
-        'is not supported yet. Paste a direct media-file URL instead.',
-      );
+      _showMessage('YouTube video recognized (ID: $youtubeId), but direct video extraction is not supported yet. Paste a direct media-file URL instead.');
       return;
     }
-
     await _historyInitialization;
     setState(() => _choosingLocation = true);
     try {
       final suggestedName = _filenameFromUri(uri);
       final location = await getSaveLocation(suggestedName: suggestedName);
       if (!mounted || location == null) return;
-
       final now = DateTime.now();
       final record = DownloadHistoryRecord(
         url: uri.toString(),
@@ -172,12 +153,9 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
         try {
           historyId = await _historyStore!.insert(record);
         } catch (error) {
-          if (mounted) {
-            _showMessage('Download will continue, but history could not be saved: $error');
-          }
+          if (mounted) _showMessage('Download will continue, but history could not be saved: $error');
         }
       }
-
       late final DownloadJob job;
       job = DownloadJob(
         url: uri,
@@ -189,9 +167,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       )..historyId = historyId;
       setState(() {
         _jobs.insert(0, job);
-        if (historyId != null) {
-          _historyRecords.insert(0, record.copyWith(id: historyId));
-        }
+        if (historyId != null) _historyRecords.insert(0, record.copyWith(id: historyId));
         _urlController.clear();
         _choosingLocation = false;
       });
@@ -205,20 +181,15 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
 
   String _filenameFromUri(Uri uri) {
     final segment = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
-    if (segment.isEmpty || segment == '.' || segment == '..') {
-      return 'download';
-    }
+    if (segment.isEmpty || segment == '.' || segment == '..') return 'download';
     return segment.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  int get _activeCount =>
-      _jobs.where((job) => job.status == DownloadStatus.downloading).length;
+  int get _activeCount => _jobs.where((job) => job.status == DownloadStatus.downloading).length;
 
   @override
   Widget build(BuildContext context) {
@@ -234,19 +205,12 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                 child: Container(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(14)),
                   child: const Icon(Icons.downloading, color: Colors.white),
                 ),
               ),
               destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.download_outlined),
-                  selectedIcon: Icon(Icons.download),
-                  label: Text('Downloads'),
-                ),
+                NavigationRailDestination(icon: Icon(Icons.download_outlined), selectedIcon: Icon(Icons.download), label: Text('Downloads')),
               ],
             ),
             const VerticalDivider(width: 1),
@@ -254,19 +218,9 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
               child: ListView(
                 padding: const EdgeInsets.all(28),
                 children: [
-                  Text(
-                    'Download Beast',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
+                  Text('Download Beast', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
-                  Text(
-                    'A faster, clearer place to manage your downloads.',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
+                  Text('A faster, clearer place to manage your downloads.', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 28),
                   Card(
                     child: Padding(
@@ -274,10 +228,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Add a download',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
+                          Text('Add a download', style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 14),
                           Row(
                             children: [
@@ -286,131 +237,43 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                                   controller: _urlController,
                                   keyboardType: TextInputType.url,
                                   onSubmitted: (_) => _addDownload(),
-                                  decoration: const InputDecoration(
-                                    hintText: 'https://example.com/file.zip',
-                                    labelText: 'Download URL',
-                                    prefixIcon: Icon(Icons.link),
-                                    border: OutlineInputBorder(),
-                                  ),
+                                  decoration: const InputDecoration(hintText: 'https://example.com/file.zip', labelText: 'Download URL', prefixIcon: Icon(Icons.link), border: OutlineInputBorder()),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               FilledButton.icon(
-                                onPressed:
-                                    _choosingLocation ? null : _addDownload,
-                                icon: _choosingLocation
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.add),
+                                onPressed: _choosingLocation ? null : _addDownload,
+                                icon: _choosingLocation ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add),
                                 label: const Text('Download'),
                               ),
                             ],
                           ),
                           const SizedBox(height: 10),
-                          Text(
-                            'Choose where to save the file. Downloads begin immediately after the server responds.',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                          Text('Choose where to save the file. Downloads begin immediately after the server responds.', style: Theme.of(context).textTheme.bodySmall),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Text(
-                        'Download queue',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const Spacer(),
-                      Chip(label: Text('$_activeCount active')),
-                    ],
-                  ),
+                  Row(children: [Text('Download queue', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)), const Spacer(), Chip(label: Text('$_activeCount active'))]),
                   const SizedBox(height: 12),
                   if (_jobs.isEmpty)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 38,
-                          horizontal: 20,
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.cloud_download_outlined,
-                              size: 44,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No downloads yet',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Paste a file URL above to start your first download.',
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
+                    Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 38, horizontal: 20), child: Column(children: [Icon(Icons.cloud_download_outlined, size: 44, color: Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(height: 12), Text('No downloads yet', style: Theme.of(context).textTheme.titleMedium), const SizedBox(height: 4), const Text('Paste a file URL above to start your first download.')])))
                   else
-                    ..._jobs.map((job) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _DownloadCard(
-                            job: job,
-                            onCancel: job.cancel,
-                          ),
-                        )),
+                    ..._jobs.map((job) => Padding(padding: const EdgeInsets.only(bottom: 10), child: _DownloadCard(job: job, onCancel: job.cancel))),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Text(
-                        'Recent history',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const Spacer(),
-                      Text('${_visibleHistory.length} saved'),
-                    ],
-                  ),
+                  Row(children: [Text('Recent history', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)), const Spacer(), Text('${_visibleHistory.length} saved')]),
                   if (_historyError != null) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      _historyError!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
+                    Text(_historyError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ],
                   const SizedBox(height: 10),
                   if (_visibleHistory.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('Completed and past downloads will appear here.'),
-                      ),
-                    )
+                    const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('Completed and past downloads will appear here.')))
                   else
-                    ..._visibleHistory.map((record) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _HistoryCard(record: record),
-                        )),
+                    ..._visibleHistory.map((record) => Padding(padding: const EdgeInsets.only(bottom: 8), child: _HistoryCard(record: record))),
                   const SizedBox(height: 20),
-                  Text(
-                    'History is stored locally on this device. Resume and segmented downloading are planned.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
+                  Text('History is stored locally on this device. Resume and segmented downloading are planned.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             ),
@@ -421,17 +284,33 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   }
 }
 
-class _SourceLink extends StatelessWidget {
+class _SourceLink extends StatefulWidget {
   const _SourceLink({required this.url});
-
   final String url;
+  @override
+  State<_SourceLink> createState() => _SourceLinkState();
+}
+
+class _SourceLinkState extends State<_SourceLink> {
+  late Future<String?> _titleFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleFuture = fetchYoutubeTitle(widget.url);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SourceLink oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) _titleFuture = fetchYoutubeTitle(widget.url);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final uri = Uri.tryParse(url);
-    final validHttpUrl = uri != null &&
-        uri.hasAuthority &&
-        (uri.scheme == 'http' || uri.scheme == 'https');
+    final uri = Uri.tryParse(widget.url);
+    final validHttpUrl = uri != null && uri.hasAuthority && (uri.scheme == 'http' || uri.scheme == 'https');
+    final fallback = downloadSourceLabel(widget.url);
 
     return Row(
       children: [
@@ -439,13 +318,20 @@ class _SourceLink extends StatelessWidget {
         const SizedBox(width: 4),
         Expanded(
           child: Tooltip(
-            message: url,
-            child: SelectableText(
-              downloadSourceLabel(url),
-              maxLines: 2,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+            message: widget.url,
+            child: FutureBuilder<String?>(
+              future: _titleFuture,
+              builder: (context, snapshot) {
+                final label = snapshot.data == null || snapshot.data!.isEmpty
+                    ? fallback
+                    : 'YouTube · ${snapshot.data!}';
+                return SelectableText(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary),
+                );
+              },
             ),
           ),
         ),
@@ -453,12 +339,8 @@ class _SourceLink extends StatelessWidget {
           tooltip: 'Copy full source URL',
           visualDensity: VisualDensity.compact,
           onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: url));
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Full source URL copied.')),
-              );
-            }
+            await Clipboard.setData(ClipboardData(text: widget.url));
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full source URL copied.')));
           },
           icon: const Icon(Icons.copy, size: 18),
         ),
@@ -468,15 +350,8 @@ class _SourceLink extends StatelessWidget {
           onPressed: !validHttpUrl
               ? null
               : () async {
-                  final opened = await launchUrl(
-                    uri,
-                    mode: LaunchMode.externalApplication,
-                  );
-                  if (!opened && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Could not open source URL.')),
-                    );
-                  }
+                  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open source URL.')));
                 },
           icon: const Icon(Icons.open_in_new, size: 18),
         ),
@@ -487,9 +362,7 @@ class _SourceLink extends StatelessWidget {
 
 class _HistoryCard extends StatelessWidget {
   const _HistoryCard({required this.record});
-
   final DownloadHistoryRecord record;
-
   @override
   Widget build(BuildContext context) {
     final filename = record.destinationPath.split(Platform.pathSeparator).last;
@@ -505,7 +378,6 @@ class _HistoryCard extends StatelessWidget {
       'failed' => Theme.of(context).colorScheme.error,
       _ => Theme.of(context).colorScheme.onSurfaceVariant,
     };
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -519,49 +391,19 @@ class _HistoryCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          filename,
-                          style: Theme.of(context).textTheme.titleSmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      Expanded(child: Text(filename, style: Theme.of(context).textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
                       const SizedBox(width: 8),
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(fileTypeLabel(filename)),
-                        padding: EdgeInsets.zero,
-                      ),
+                      Chip(visualDensity: VisualDensity.compact, label: Text(fileTypeLabel(filename)), padding: EdgeInsets.zero),
                     ],
                   ),
-                  Tooltip(
-                    message: record.destinationPath,
-                    child: SelectableText(
-                      'Saved to: ${record.destinationPath}',
-                      maxLines: 2,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
+                  Tooltip(message: record.destinationPath, child: SelectableText('Saved to: ${record.destinationPath}', maxLines: 2, style: Theme.of(context).textTheme.bodySmall)),
                   const SizedBox(height: 3),
                   _SourceLink(url: record.url),
                   const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 4,
-                    children: [
-                      Text(status),
-                      Text(_formatBytes(record.receivedBytes)),
-                      if (record.totalBytes > 0)
-                        Text('of ${_formatBytes(record.totalBytes)}'),
-                      Text(_formatDate(record.updatedAt)),
-                    ],
-                  ),
+                  Wrap(spacing: 10, runSpacing: 4, children: [Text(status), Text(_formatBytes(record.receivedBytes)), if (record.totalBytes > 0) Text('of ${_formatBytes(record.totalBytes)}'), Text(_formatDate(record.updatedAt))]),
                   if (record.errorMessage != null) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      record.errorMessage!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
+                    Text(record.errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ],
                 ],
               ),
@@ -571,16 +413,12 @@ class _HistoryCard extends StatelessWidget {
       ),
     );
   }
-
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
-
   String _formatDate(DateTime value) {
     final local = value.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
@@ -590,10 +428,8 @@ class _HistoryCard extends StatelessWidget {
 
 class _DownloadCard extends StatelessWidget {
   const _DownloadCard({required this.job, required this.onCancel});
-
   final DownloadJob job;
   final VoidCallback onCancel;
-
   @override
   Widget build(BuildContext context) {
     final filename = job.destinationPath.split(Platform.pathSeparator).last;
@@ -603,10 +439,7 @@ class _DownloadCard extends StatelessWidget {
       DownloadStatus.failed => 'Failed',
       DownloadStatus.cancelled => 'Cancelled',
     };
-    final progress = job.totalBytes > 0
-        ? (job.receivedBytes / job.totalBytes).clamp(0.0, 1.0)
-        : null;
-
+    final progress = job.totalBytes > 0 ? (job.receivedBytes / job.totalBytes).clamp(0.0, 1.0) : null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -615,29 +448,12 @@ class _DownloadCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    filename,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                Expanded(child: Text(filename, style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 8),
-                Chip(
-                  visualDensity: VisualDensity.compact,
-                  label: Text(fileTypeLabel(filename)),
-                  padding: EdgeInsets.zero,
-                ),
+                Chip(visualDensity: VisualDensity.compact, label: Text(fileTypeLabel(filename)), padding: EdgeInsets.zero),
               ],
             ),
-            Tooltip(
-              message: job.destinationPath,
-              child: SelectableText(
-                'Saved to: ${job.destinationPath}',
-                maxLines: 2,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
+            Tooltip(message: job.destinationPath, child: SelectableText('Saved to: ${job.destinationPath}', maxLines: 2, style: Theme.of(context).textTheme.bodySmall)),
             const SizedBox(height: 4),
             _SourceLink(url: job.url.toString()),
             const SizedBox(height: 10),
@@ -645,38 +461,20 @@ class _DownloadCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    progress == null
-                        ? '$status · ${_formatBytes(job.receivedBytes)}'
-                        : '$status · ${_formatBytes(job.receivedBytes)} of ${_formatBytes(job.totalBytes)}',
-                  ),
-                ),
-                if (job.status == DownloadStatus.downloading)
-                  TextButton.icon(
-                    onPressed: onCancel,
-                    icon: const Icon(Icons.close),
-                    label: const Text('Cancel'),
-                  ),
+                Expanded(child: Text(progress == null ? '$status · ${_formatBytes(job.receivedBytes)}' : '$status · ${_formatBytes(job.receivedBytes)} of ${_formatBytes(job.totalBytes)}')),
+                if (job.status == DownloadStatus.downloading) TextButton.icon(onPressed: onCancel, icon: const Icon(Icons.close), label: const Text('Cancel')),
               ],
             ),
-            if (job.errorMessage != null)
-              Text(
-                job.errorMessage!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+            if (job.errorMessage != null) Text(job.errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ],
         ),
       ),
     );
   }
-
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }
