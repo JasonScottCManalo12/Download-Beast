@@ -77,8 +77,10 @@ void main() {
     expect(saved.receivedBytes, 42);
     expect(saved.totalBytes, 200);
     expect(saved.errorMessage, 'Network error');
-    expect(saved.updatedAt, later.updatedAt);
-    expect(saved.createdAt, initial.createdAt);
+    expect(saved.updatedAt.millisecondsSinceEpoch,
+        later.updatedAt.millisecondsSinceEpoch);
+    expect(saved.createdAt.millisecondsSinceEpoch,
+        initial.createdAt.millisecondsSinceEpoch);
   });
 
   test('returns recent records newest first and honors the limit', () async {
