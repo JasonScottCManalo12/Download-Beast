@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:download_beast/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,8 +34,12 @@ void main() {
 
   testWidgets('shows actionable guidance when the save-location picker fails',
       (tester) async {
+    final pickerCalled = Completer<void>();
     await tester.pumpWidget(DownloadBeastApp(
-      saveLocationPicker: (_) async => throw Exception('Access denied'),
+      saveLocationPicker: (_) async {
+        if (!pickerCalled.isCompleted) pickerCalled.complete();
+        throw Exception('Access denied');
+      },
     ));
 
     await tester.enterText(
@@ -41,7 +47,18 @@ void main() {
       'https://example.com/sample.zip',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Download'));
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    // History initialization performs asynchronous file/database I/O. Pump
+    // frames while waiting for the picker callback instead of relying on
+    // pumpAndSettle, which can stop before an outstanding future completes.
+    for (var attempt = 0;
+        attempt < 30 && !pickerCalled.isCompleted;
+        attempt++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(pickerCalled.isCompleted, isTrue,
+        reason: 'The save-location picker should be invoked after validation.');
+    await tester.pump();
 
     expect(
       find.text(
