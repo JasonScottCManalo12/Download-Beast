@@ -25,7 +25,7 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
 - [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
 - [x] **Merge verified changes into `main`:** merged via [PR #2](https://github.com/JasonScottCManalo12/Download-Beast/pull/2); merge commit `fcfaff0fd3f7bdb7f3220af36f44bfa0ea13a58a`
-- [ ] **Persistent download history:** SQLite-backed history and safe restart recovery
+- [ ] **Persistent download history (Milestone 8, in progress):** SQLite-backed records for URLs, destinations, statuses, progress, errors, and timestamps; restore recent history on startup
 - [ ] **Pause/resume:** use HTTP Range support when the server allows it
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
@@ -34,7 +34,7 @@ Latest CI run before this documentation update: [Run #22](https://github.com/Jas
 
 ## Not implemented yet
 
-- Persistent download history / SQLite
+- Download history is being implemented on branch `feature/sqlite-download-history`; regression tests cover database reopen persistence, status/progress updates, and recent ordering
 - Pause and resume
 - Segmented or multi-connection downloads
 - Retry scheduling and bandwidth limits
