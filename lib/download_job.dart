@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -9,7 +10,11 @@ class DownloadJob {
     required this.url,
     required this.destinationPath,
     required this.onChanged,
-  });
+  }) {
+    _client.connectionTimeout = const Duration(seconds: 20);
+    _client.idleTimeout = const Duration(seconds: 30);
+    _client.userAgent = 'DownloadBeast/0.1';
+  }
 
   final Uri url;
   final String destinationPath;
@@ -27,7 +32,7 @@ class DownloadJob {
       : null;
 
   void cancel() {
-    if (status != DownloadStatus.downloading) return;
+    if (status != DownloadStatus.downloading || _cancelRequested) return;
     _cancelRequested = true;
     _client.close(force: true);
     onChanged();
@@ -37,11 +42,17 @@ class DownloadJob {
     IOSink? sink;
     final output = File(destinationPath);
     try {
+      if (_cancelRequested) throw const _DownloadCancelled();
+
       final request = await _client.getUrl(url);
-      request.headers.set(HttpHeaders.userAgentHeader, 'DownloadBeast/0.1');
+      if (_cancelRequested) throw const _DownloadCancelled();
+
       final response = await request.close();
+      if (_cancelRequested) throw const _DownloadCancelled();
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Drain the response so the connection can be released cleanly.
+        await response.drain<void>();
         throw HttpException('Server returned HTTP ${response.statusCode}.');
       }
 
@@ -53,6 +64,8 @@ class DownloadJob {
         receivedBytes += chunk.length;
         onChanged();
       }
+      if (_cancelRequested) throw const _DownloadCancelled();
+
       await sink.flush();
       await sink.close();
       sink = null;
@@ -65,18 +78,17 @@ class DownloadJob {
       }
     } on _DownloadCancelled {
       status = DownloadStatus.cancelled;
-      if (sink != null) await sink.close();
+      await _closeSinkQuietly(sink);
       await _deletePartialFile(output);
     } catch (error) {
-      if (sink != null) await sink.close();
+      await _closeSinkQuietly(sink);
       if (_cancelRequested) {
         status = DownloadStatus.cancelled;
         await _deletePartialFile(output);
       } else {
         status = DownloadStatus.failed;
-        errorMessage = error is HttpException
-            ? error.message
-            : 'The download could not be completed.';
+        errorMessage = _describeError(error);
+        await _deletePartialFile(output);
       }
     } finally {
       _client.close(force: true);
@@ -84,11 +96,39 @@ class DownloadJob {
     }
   }
 
+  String _describeError(Object error) {
+    if (error is HttpException) return error.message;
+    if (error is SocketException) {
+      return 'Network error: ${error.message}. Check your internet connection, server URL, firewall, or proxy.';
+    }
+    if (error is HandshakeException) {
+      return 'Secure connection failed: ${error.message}. Check the site certificate and system date/time.';
+    }
+    if (error is FileSystemException) {
+      return 'File error: ${error.message}. Check the save location and folder permissions.';
+    }
+    if (error is TimeoutException) {
+      return 'Connection timed out. Check your internet connection or try again.';
+    }
+    return 'Unexpected download error: $error';
+  }
+
+  Future<void> _closeSinkQuietly(IOSink? sink) async {
+    if (sink == null) return;
+    try {
+      await sink.close();
+    } on FileSystemException {
+      // Preserve the original download error or cancellation result.
+    } on StateError {
+      // The sink may already have been closed by the failing write.
+    }
+  }
+
   Future<void> _deletePartialFile(File file) async {
     try {
       if (await file.exists()) await file.delete();
     } on FileSystemException {
-      // Cancellation is still reported even if cleanup is blocked.
+      // Keep the original error/status visible if cleanup is blocked.
     }
   }
 }
