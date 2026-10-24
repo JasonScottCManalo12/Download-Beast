@@ -84,6 +84,31 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       .where((record) => !_jobs.any((job) => job.historyId == record.id))
       .toList(growable: false);
 
+  Future<void> _retryHistory(DownloadHistoryRecord record) async {
+    final uri = Uri.tryParse(record.url);
+    if (uri == null || !uri.hasAuthority ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      _showMessage('This saved URL is no longer valid for retrying.');
+      return;
+    }
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: uri,
+      destinationPath: record.destinationPath,
+      onChanged: () {
+        if (mounted) setState(() {});
+        _queuePersistJob(job);
+      },
+    )
+      ..historyId = record.id
+      ..status = DownloadStatus.failed
+      ..receivedBytes = 0
+      ..totalBytes = -1
+      ..errorMessage = record.errorMessage;
+    setState(() => _jobs.insert(0, job));
+    await job.retry();
+  }
+
   Future<void> _resumeHistory(DownloadHistoryRecord record) async {
     final uri = Uri.tryParse(record.url);
     if (uri == null || !uri.hasAuthority ||
@@ -385,7 +410,8 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                               job: job,
                               onPause: () => unawaited(job.pause()),
                               onResume: () => unawaited(job.resume()),
-                              onCancel: job.cancel),
+                              onCancel: job.cancel,
+                              onRetry: () => unawaited(job.retry())),
                         )),
                   const SizedBox(height: 24),
                   Row(
@@ -423,6 +449,9 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                               record: record,
                               onResume: record.status == 'paused'
                                   ? () => unawaited(_resumeHistory(record))
+                                  : null,
+                              onRetry: record.status == 'failed'
+                                  ? () => unawaited(_retryHistory(record))
                                   : null),
                         )),
                 ],
@@ -537,12 +566,14 @@ class _DownloadCard extends StatelessWidget {
     required this.onPause,
     required this.onResume,
     required this.onCancel,
+    required this.onRetry,
   });
 
   final DownloadJob job;
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onCancel;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -593,7 +624,13 @@ class _DownloadCard extends StatelessWidget {
                 if (job.totalBytes > 0)
                   Text(' of ${_formatBytes(job.totalBytes)}'),
                 const Spacer(),
-                if (job.status == DownloadStatus.downloading) ...[
+                if (job.status == DownloadStatus.failed) ...[
+                  TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ] else if (job.status == DownloadStatus.downloading) ...[
                   TextButton.icon(
                     onPressed: onPause,
                     icon: const Icon(Icons.pause),
@@ -630,10 +667,11 @@ class _DownloadCard extends StatelessWidget {
 }
 
 class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.record, this.onResume});
+  const _HistoryCard({required this.record, this.onResume, this.onRetry});
 
   final DownloadHistoryRecord record;
   final VoidCallback? onResume;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -710,6 +748,12 @@ class _HistoryCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (onRetry != null)
+              IconButton(
+                tooltip: 'Retry failed download',
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+              ),
             if (onResume != null)
               IconButton(
                 tooltip: 'Resume paused download',
