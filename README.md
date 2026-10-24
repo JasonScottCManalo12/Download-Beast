@@ -13,7 +13,8 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - Per-download completed, failed, and cancelled states
 - Automated local-HTTP tests for successful downloads, HTTP 404 handling, and cancellation cleanup
 - Widget tests for the dashboard and rejection of non-HTTP URLs
-- Windows build, static analysis, and test workflow in GitHub Actions
+- GitHub Actions workflow for analysis, tests, and Windows release builds
+- Windows release package names the main executable `Download Beast.exe` and includes the supporting runtime files
 
 ## Not implemented yet
 
@@ -23,9 +24,15 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - Retry scheduling and bandwidth limits
 - Checksum verification
 - Browser extension integration
-- Signed installer and release packaging
+- Signed installer
 
 This is an initial development build, not yet a production replacement for Internet Download Manager. Test downloads with files you are authorized to retrieve. Servers may block downloads, require authentication, or omit progress metadata.
+
+## Windows build package
+
+Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
+
+The package has not been manually smoke-tested on a separate Windows PC yet.
 
 ## Development
 
@@ -39,13 +46,14 @@ flutter test
 flutter run -d windows
 ```
 
-The GitHub Actions workflow generates the Windows runner scaffolding during CI, then analyzes, tests, and builds the release app.
+The GitHub Actions workflow generates the Windows runner scaffolding during CI, then analyzes, tests, builds the release app, renames the main executable, and uploads the release folder as an artifact.
 
 ## Roadmap
 
-1. Add automated download behavior tests and validate the initial Windows flow (in progress; CI tests cover local HTTP success, 404 errors, and cancellation).
-2. Manually smoke-test the Windows executable on a real Windows PC.
-3. Add persistent history and safe restart recovery.
-4. Add robust pause/resume using HTTP range support when available.
-5. Add bounded segmented downloading, retries, and checksum validation.
-6. Improve packaging, accessibility, and cross-platform support.
+1. Add automated download behavior tests and validate the initial Windows flow (CI tests cover local HTTP success, 404 errors, and cancellation).
+2. Package the Windows release with the main executable named `Download Beast.exe` (CI packaging change added; awaiting a green run).
+3. Manually smoke-test the Windows executable on a real Windows PC.
+4. Add persistent history and safe restart recovery.
+5. Add robust pause/resume using HTTP range support when available.
+6. Add bounded segmented downloading, retries, and checksum validation.
+7. Improve packaging, accessibility, and cross-platform support.
