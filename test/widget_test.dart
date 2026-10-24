@@ -41,8 +41,7 @@ void main() {
       'https://example.com/sample.zip',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Download'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
     expect(
       find.text(
