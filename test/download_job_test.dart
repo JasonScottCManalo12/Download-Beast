@@ -74,7 +74,13 @@ void main() {
         }
         return;
       }
-      if (request.uri.path == '/always-unavailable') {\n        request.response.statusCode = HttpStatus.serviceUnavailable;\n        request.response.write('Temporarily unavailable');\n        await request.response.close();\n        return;\n      }\n      if (request.uri.path == '/flaky') {
+      if (request.uri.path == '/always-unavailable') {
+        request.response.statusCode = HttpStatus.serviceUnavailable;
+        request.response.write('Temporarily unavailable');
+        await request.response.close();
+        return;
+      }
+      if (request.uri.path == '/flaky') {
         flakyRouteCount++;
         if (flakyRouteCount == 1) {
           request.response.statusCode = HttpStatus.serviceUnavailable;
