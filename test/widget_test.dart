@@ -30,6 +30,30 @@ void main() {
     expect(find.bySemanticsLabel('Download'), findsOneWidget);
   });
 
+  testWidgets('shows actionable guidance when the save-location picker fails',
+      (tester) async {
+    await tester.pumpWidget(DownloadBeastApp(
+      saveLocationPicker: (_) async => throw Exception('Access denied'),
+    ));
+
+    await tester.enterText(
+      find.byType(TextField),
+      'https://example.com/sample.zip',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Download'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Could not choose a save location. Check that the destination is '
+        'available and you have permission, then try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('No downloads yet'), findsOneWidget);
+  });
+
   testWidgets('rejects non-HTTP URLs without opening the save picker',
       (tester) async {
     await tester.pumpWidget(const DownloadBeastApp());
