@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'file_identity.dart';
 
 import 'download_job.dart';
 import 'download_history.dart';
@@ -192,7 +195,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   String _filenameFromUri(Uri uri) {
     final segment = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
     if (segment.isEmpty || segment == '.' || segment == '..') {
-      return 'download.bin';
+      return 'download';
     }
     return segment.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
   }
@@ -407,6 +410,70 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   }
 }
 
+class _SourceLink extends StatelessWidget {
+  const _SourceLink({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = Uri.tryParse(url);
+    final validHttpUrl = uri != null &&
+        uri.hasAuthority &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
+
+    return Row(
+      children: [
+        const Icon(Icons.link, size: 16),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Tooltip(
+            message: url,
+            child: SelectableText(
+              displayDownloadUri(url),
+              maxLines: 2,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Copy full source URL',
+          visualDensity: VisualDensity.compact,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: url));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Full source URL copied.')),
+              );
+            }
+          },
+          icon: const Icon(Icons.copy, size: 18),
+        ),
+        IconButton(
+          tooltip: 'Open source link in browser',
+          visualDensity: VisualDensity.compact,
+          onPressed: !validHttpUrl
+              ? null
+              : () async {
+                  final opened = await launchUrl(
+                    uri,
+                    mode: LaunchMode.externalApplication,
+                  );
+                  if (!opened && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not open source URL.')),
+                    );
+                  }
+                },
+          icon: const Icon(Icons.open_in_new, size: 18),
+        ),
+      ],
+    );
+  }
+}
+
 class _HistoryCard extends StatelessWidget {
   const _HistoryCard({required this.record});
 
@@ -439,21 +506,38 @@ class _HistoryCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(filename, style: Theme.of(context).textTheme.titleSmall),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          filename,
+                          style: Theme.of(context).textTheme.titleSmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(fileTypeLabel(filename)),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                  Tooltip(
+                    message: record.destinationPath,
+                    child: SelectableText(
+                      'Saved to: ${record.destinationPath}',
+                      maxLines: 2,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     '$status · ${_formatBytes(record.receivedBytes)}'
                     '${record.totalBytes > 0 ? ' / ${_formatBytes(record.totalBytes)}' : ''}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  Text(
-                    record.url,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
+                  _SourceLink(url: record.url),
                   if (record.errorMessage != null)
                     Text(
                       record.errorMessage!,
@@ -506,12 +590,33 @@ class _DownloadCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    job.destinationPath.split(Platform.pathSeparator).last,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          job.destinationPath.split(Platform.pathSeparator).last,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(fileTypeLabel(job.destinationPath.split(Platform.pathSeparator).last)),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                  Tooltip(
+                    message: job.destinationPath,
+                    child: SelectableText(
+                      'Saved to: ${job.destinationPath}',
+                      maxLines: 2,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                   const SizedBox(height: 4),
+                  _SourceLink(url: job.url.toString()),
                   Text(
                     '$statusText · ${_formatBytes(job.receivedBytes)}'
                     '${job.totalBytes > 0 ? ' / ${_formatBytes(job.totalBytes)}' : ''}',
