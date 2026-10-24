@@ -218,7 +218,6 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       return;
     }
 
-    await _historyInitialization;
     if (!mounted) return;
     setState(() => _choosingLocation = true);
     try {
@@ -236,6 +235,11 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
         return;
       }
       if (!mounted || destinationPath == null) return;
+
+      // Let the user choose a destination without waiting on history storage.
+      // Persistence still waits for initialization before creating the record.
+      await _historyInitialization;
+      if (!mounted) return;
 
       final now = DateTime.now();
       final record = DownloadHistoryRecord(
