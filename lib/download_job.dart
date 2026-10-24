@@ -20,6 +20,9 @@ class DownloadJob {
   final String destinationPath;
   final VoidCallback onChanged;
 
+  /// Database row for this download, assigned by the history store.
+  int? historyId;
+
   final HttpClient _client = HttpClient();
   DownloadStatus status = DownloadStatus.downloading;
   int receivedBytes = 0;
@@ -51,7 +54,6 @@ class DownloadJob {
       if (_cancelRequested) throw const _DownloadCancelled();
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        // Drain the response so the connection can be released cleanly.
         await response.drain<void>();
         throw HttpException('Server returned HTTP ${response.statusCode}.');
       }
