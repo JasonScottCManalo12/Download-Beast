@@ -21,10 +21,7 @@ class DownloadJob {
   Future<void>? _activeRun;
   bool _cancelRequested = false;
   bool _pauseRequested = false;
-  String? _etag;
-
-  String? get entityTag => _etag;
-  set entityTag(String? value) => _etag = value;
+  String? entityTag;
 
   DownloadStatus status = DownloadStatus.downloading;
   int receivedBytes = 0;
@@ -97,7 +94,7 @@ class DownloadJob {
       final request = await client.getUrl(url);
       if (existingBytes > 0) {
         request.headers.set(HttpHeaders.rangeHeader, 'bytes=$existingBytes-');
-        if (_etag != null) request.headers.set(HttpHeaders.ifRangeHeader, _etag!);
+        if (entityTag != null) request.headers.set(HttpHeaders.ifRangeHeader, entityTag!);
       }
       if (_cancelRequested) throw const _DownloadCancelled();
       if (_pauseRequested) throw const _DownloadPaused();
@@ -128,7 +125,7 @@ class DownloadJob {
           throw const HttpException('Server returned a mismatched Content-Range.');
         }
         final responseEtag = response.headers.value(HttpHeaders.etagHeader);
-        if (_etag != null && responseEtag != _etag) {
+        if (entityTag != null && responseEtag != entityTag) {
           await response.drain<void>();
           throw const HttpException('The remote file changed; resume was rejected.');
         }
@@ -143,7 +140,7 @@ class DownloadJob {
         throw HttpException('Server returned HTTP ${response.statusCode}.');
       }
 
-      _etag = response.headers.value(HttpHeaders.etagHeader) ?? _etag;
+      entityTag = response.headers.value(HttpHeaders.etagHeader) ?? entityTag;
       sink = output.openWrite(mode: append ? FileMode.append : FileMode.write);
       await for (final chunk in response) {
         if (_cancelRequested) throw const _DownloadCancelled();
