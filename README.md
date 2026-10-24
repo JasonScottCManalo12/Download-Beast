@@ -28,15 +28,14 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Persistent download history (Milestone 8, operational):** SQLite-backed records for URLs, destinations, statuses, progress, errors, and timestamps; restore recent history on startup and mark stale active records interrupted
 - [x] **Milestone 8 usability fixes:** readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
 - [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
-- [ ] **Milestone 9 — Pause/resume downloads:** test-first implementation tracked in [issue #5](https://github.com/JasonScottCManalo12/Download-Beast/issues/5); validate HTTP Range and Content-Range behavior, preserve file integrity, and persist pause/resume state
+- [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
 - [ ] **Advanced downloads:** bounded segmented downloading, retry scheduling, bandwidth limits, and checksum verification
 - [ ] **Release polish:** installer/signing, accessibility, and additional platform support
 
-Latest verified CI run: [Run #58](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40127489041), passed Flutter analysis/tests and the Windows release build/package upload on `main`.
+Latest verified post-merge CI run for Milestone 9: [Run #80](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40133565044), passed Flutter analysis/tests and the Windows release build/package upload on `main`.
 
 ## Not implemented yet
 
-- Pause and resume
 - Segmented or multi-connection downloads
 - Retry scheduling and bandwidth limits
 - Checksum verification
@@ -49,7 +48,7 @@ This is an initial development build, not yet a production replacement for Inter
 
 Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
 
-Manual Windows verification is complete for the current build: the user confirmed the app opens and the download and cancellation tests are good.
+Manual Windows verification for Milestone 9 is user-confirmed complete: the user reported all five smoke-test checks passed, including app launch, direct download, pause/resume and file integrity, cancellation/cleanup, and history after restart.
 
 ## Development
 
