@@ -28,8 +28,6 @@ void main() {
         heldResponses.add(hold);
         request.response.bufferOutput = false;
         request.response.headers.contentType = ContentType.text;
-        // Use chunked transfer and a sizeable first chunk. Keeping the
-        // response open gives the test a reliable active transfer to cancel.
         request.response.add(List<int>.filled(64 * 1024, 65));
         await request.response.flush();
         if (!slowResponseFlushed.isCompleted) {
@@ -101,6 +99,39 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
+  test('reports a useful network error when the server is unreachable', () async {
+    final unusedServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final port = unusedServer.port;
+    await unusedServer.close(force: true);
+    final destination = '${tempDirectory.path}/unreachable.txt';
+    final job = DownloadJob(
+      url: Uri.parse('http://127.0.0.1:$port/unreachable'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('Network error:'));
+    expect(await File(destination).exists(), isFalse);
+  });
+
+  test('removes partial output when the save directory is invalid', () async {
+    final destination = '${tempDirectory.path}/missing-folder/payload.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.failed);
+    expect(job.errorMessage, contains('File error:'));
+    expect(await File(destination).exists(), isFalse);
+  });
+
   test('cancels an active download and removes the partial file', () async {
     final destination = '${tempDirectory.path}/partial.txt';
     final firstChunkReceived = Completer<void>();
@@ -118,6 +149,32 @@ void main() {
     final running = job.start();
     await slowResponseFlushed.future.timeout(const Duration(seconds: 10));
     await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    job.cancel();
+    await running.timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.cancelled);
+    expect(await File(destination).exists(), isFalse);
+  });
+
+  test('cancels an active download only once and ignores later cancel calls',
+      () async {
+    final destination = '${tempDirectory.path}/partial-twice.txt';
+    final firstChunkReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/slow'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !firstChunkReceived.isCompleted) {
+          firstChunkReceived.complete();
+        }
+      },
+    );
+
+    final running = job.start();
+    await slowResponseFlushed.future.timeout(const Duration(seconds: 10));
+    await firstChunkReceived.future.timeout(const Duration(seconds: 10));
+    job.cancel();
     job.cancel();
     await running.timeout(const Duration(seconds: 10));
 
