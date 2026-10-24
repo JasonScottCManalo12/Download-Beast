@@ -91,7 +91,8 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       _showMessage('This saved URL is no longer valid for resuming.');
       return;
     }
-    final job = DownloadJob(
+    late final DownloadJob job;
+    job = DownloadJob(
       url: uri,
       destinationPath: record.destinationPath,
       onChanged: () {
