@@ -64,6 +64,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   Future<void> _initializeHistory() async {
     try {
       _historyStore ??= await DownloadHistoryStore.open();
+      await _historyStore!.markActiveDownloadsInterrupted();
       final records = await _historyStore!.listRecent();
       if (!mounted) return;
       setState(() {
