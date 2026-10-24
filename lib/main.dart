@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -82,6 +83,29 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   List<DownloadHistoryRecord> get _visibleHistory => _historyRecords
       .where((record) => !_jobs.any((job) => job.historyId == record.id))
       .toList(growable: false);
+
+  Future<void> _resumeHistory(DownloadHistoryRecord record) async {
+    final uri = Uri.tryParse(record.url);
+    if (uri == null || !uri.hasAuthority ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      _showMessage('This saved URL is no longer valid for resuming.');
+      return;
+    }
+    final job = DownloadJob(
+      url: uri,
+      destinationPath: record.destinationPath,
+      onChanged: () {
+        if (mounted) setState(() {});
+        _queuePersistJob(job);
+      },
+    )
+      ..historyId = record.id
+      ..status = DownloadStatus.paused
+      ..receivedBytes = record.receivedBytes
+      ..totalBytes = record.totalBytes;
+    setState(() => _jobs.insert(0, job));
+    await job.resume();
+  }
 
   void _queuePersistJob(DownloadJob job) {
     final id = job.historyId;
@@ -354,7 +378,10 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                     ..._jobs.map((job) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _DownloadCard(
-                              job: job, onCancel: job.cancel),
+                              job: job,
+                              onPause: () => unawaited(job.pause()),
+                              onResume: () => unawaited(job.resume()),
+                              onCancel: job.cancel),
                         )),
                   const SizedBox(height: 24),
                   Row(
@@ -388,7 +415,11 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                   else
                     ..._visibleHistory.map((record) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: _HistoryCard(record: record),
+                          child: _HistoryCard(
+                              record: record,
+                              onResume: record.status == 'paused'
+                                  ? () => unawaited(_resumeHistory(record))
+                                  : null),
                         )),
                 ],
               ),
@@ -497,9 +528,16 @@ class _SourceLinkState extends State<_SourceLink> {
 }
 
 class _DownloadCard extends StatelessWidget {
-  const _DownloadCard({required this.job, required this.onCancel});
+  const _DownloadCard({
+    required this.job,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
 
   final DownloadJob job;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
   final VoidCallback onCancel;
 
   @override
@@ -508,6 +546,7 @@ class _DownloadCard extends StatelessWidget {
         job.destinationPath.split(Platform.pathSeparator).last;
     final status = switch (job.status) {
       DownloadStatus.downloading => 'Downloading',
+      DownloadStatus.paused => 'Paused',
       DownloadStatus.completed => 'Completed',
       DownloadStatus.failed => 'Failed',
       DownloadStatus.cancelled => 'Cancelled',
@@ -550,12 +589,29 @@ class _DownloadCard extends StatelessWidget {
                 if (job.totalBytes > 0)
                   Text(' of ${_formatBytes(job.totalBytes)}'),
                 const Spacer(),
-                if (job.status == DownloadStatus.downloading)
+                if (job.status == DownloadStatus.downloading) ...[
+                  TextButton.icon(
+                    onPressed: onPause,
+                    icon: const Icon(Icons.pause),
+                    label: const Text('Pause'),
+                  ),
                   TextButton.icon(
                     onPressed: onCancel,
                     icon: const Icon(Icons.close),
                     label: const Text('Cancel'),
                   ),
+                ] else if (job.status == DownloadStatus.paused) ...[
+                  TextButton.icon(
+                    onPressed: onResume,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Resume'),
+                  ),
+                  TextButton.icon(
+                    onPressed: onCancel,
+                    icon: const Icon(Icons.close),
+                    label: const Text('Cancel'),
+                  ),
+                ],
               ],
             ),
             if (job.errorMessage != null)
@@ -570,9 +626,10 @@ class _DownloadCard extends StatelessWidget {
 }
 
 class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.record});
+  const _HistoryCard({required this.record, this.onResume});
 
   final DownloadHistoryRecord record;
+  final VoidCallback? onResume;
 
   @override
   Widget build(BuildContext context) {
@@ -580,6 +637,7 @@ class _HistoryCard extends StatelessWidget {
         record.destinationPath.split(Platform.pathSeparator).last;
     final status = switch (record.status) {
       'completed' => 'Completed',
+      'paused' => 'Paused',
       'failed' => 'Failed',
       'cancelled' => 'Cancelled',
       'interrupted' => 'Interrupted',
