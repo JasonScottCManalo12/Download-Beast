@@ -83,6 +83,27 @@ void main() {
         initial.createdAt.millisecondsSinceEpoch);
   });
 
+  test('marks only active downloads interrupted after restart', () async {
+    final activeId = await store.insert(record(receivedBytes: 32, totalBytes: 100));
+    final completedId = await store.insert(record(
+      status: 'completed',
+      receivedBytes: 100,
+      totalBytes: 100,
+    ));
+
+    expect(await store.markActiveDownloadsInterrupted(), 1);
+
+    final records = await store.listRecent();
+    final active = records.singleWhere((item) => item.id == activeId);
+    final completed = records.singleWhere((item) => item.id == completedId);
+
+    expect(active.status, 'interrupted');
+    expect(active.receivedBytes, 32);
+    expect(active.errorMessage, 'App closed before the download finished.');
+    expect(completed.status, 'completed');
+    expect(completed.receivedBytes, 100);
+  });
+
   test('returns recent records newest first and honors the limit', () async {
     final first = record(status: 'completed').copyWith(
       updatedAt: DateTime.utc(2026, 1, 1),
