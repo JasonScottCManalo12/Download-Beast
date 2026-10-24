@@ -30,9 +30,9 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
 - [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
-- [ ] **Release polish:** installer/signing, accessibility, and additional platform support
+- [ ] **Milestone 11 — Windows release polish and usability:** accessibility, clear validation/errors, and verified release packaging; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9)
 
-Latest verified feature-branch CI run: [Run #88](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40138004306), passed Flutter analysis/tests and the Windows release build/package upload. The user confirmed all Milestone 10 smoke-test checks passed; merge is pending.
+Latest verified CI on `main`: [Workflow #91](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40140401073), passed Flutter analysis, automated tests, Windows release build, and package upload after Milestone 10 was merged.
 
 ## Not implemented yet
 
@@ -49,7 +49,7 @@ This is an initial development build, not yet a production replacement for Inter
 
 Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
 
-Manual Windows verification is user-confirmed complete for Milestones 9 and 10. For Milestone 10, the user reported all smoke-test checks passed, including retry success, retry after app restart, non-retryable error messaging, file integrity, and pause/resume/cancellation checks.
+Manual Windows verification is user-confirmed complete for Milestones 9 and 10. For Milestone 10, all smoke-test checks were reported passed, including retry success, retry after app restart, non-retryable error messaging, file integrity, and pause/resume/cancellation checks.
 
 ## Development
 
