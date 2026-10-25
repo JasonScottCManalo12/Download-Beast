@@ -20,9 +20,9 @@ void main() {
   });
 
   test('validates SHA-256 input format', () {
-    expect(isValidSha256('a' * 64), isTrue);
-    expect(isValidSha256('g' * 64), isFalse);
-    expect(isValidSha256('a' * 63), isFalse);
+    expect(isValidSha256(List.filled(64, 'a').join()), isTrue);
+    expect(isValidSha256(List.filled(64, 'g').join()), isFalse);
+    expect(isValidSha256(List.filled(63, 'a').join()), isFalse);
     expect(isValidSha256(''), isFalse);
   });
 
@@ -34,7 +34,7 @@ void main() {
   });
 
   test('reports mismatch when the supplied expected hash differs', () async {
-    final result = await verifySha256(file, expectedSha256: '0' * 64);
+    final result = await verifySha256(file, expectedSha256: List.filled(64, '0').join());
     expect(result.status, IntegrityStatus.mismatch);
     expect(result.actualSha256, isNotNull);
   });
