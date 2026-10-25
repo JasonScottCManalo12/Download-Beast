@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:download_beast/download_job.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -431,6 +432,60 @@ void main() {
     expect(job.status, DownloadStatus.failed);
     expect(job.errorMessage, contains('503'));
     expect(await File(destination).exists(), isFalse);
+  });
+
+
+  test('reports verified SHA-256 when expected hash matches downloaded bytes', () async {
+    const payload = 'Download Beast test payload';
+    final expected = sha256.convert(utf8.encode(payload)).toString();
+    final destination = '${tempDirectory.path}/verified.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      expectedSha256: expected,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.integrityStatus, 'verified');
+    expect(job.actualSha256, expected);
+    expect(job.integrityCheckedAt, isNotNull);
+    expect(await File(destination).readAsString(), payload);
+  });
+
+  test('reports hash mismatch without deleting the completed file', () async {
+    final destination = '${tempDirectory.path}/mismatch.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      expectedSha256: '0' * 64,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.integrityStatus, 'mismatch');
+    expect(job.actualSha256, isNotNull);
+    expect(job.errorMessage, contains('does not match'));
+    expect(await File(destination).exists(), isTrue);
+  });
+
+  test('does not claim hash verification when no expected hash is supplied', () async {
+    final destination = '${tempDirectory.path}/unchecked.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.integrityStatus, 'notChecked');
+    expect(job.actualSha256, isNull);
   });
 
 }
