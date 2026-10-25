@@ -11,14 +11,21 @@ import 'download_job.dart';
 import 'file_identity.dart';
 import 'youtube_metadata.dart';
 
+typedef SaveLocationPicker = Future<String?> Function(String suggestedName);
+
 void main() {
   runApp(const DownloadBeastApp());
 }
 
 class DownloadBeastApp extends StatelessWidget {
-  const DownloadBeastApp({super.key, this.historyStore});
+  const DownloadBeastApp({
+    super.key,
+    this.historyStore,
+    this.saveLocationPicker,
+  });
 
   final DownloadHistoryStore? historyStore;
+  final SaveLocationPicker? saveLocationPicker;
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +38,23 @@ class DownloadBeastApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF7F6FA),
       ),
-      home: DownloadHomePage(historyStore: historyStore),
+      home: DownloadHomePage(
+        historyStore: historyStore,
+        saveLocationPicker: saveLocationPicker,
+      ),
     );
   }
 }
 
 class DownloadHomePage extends StatefulWidget {
-  const DownloadHomePage({super.key, this.historyStore});
+  const DownloadHomePage({
+    super.key,
+    this.historyStore,
+    this.saveLocationPicker,
+  });
 
   final DownloadHistoryStore? historyStore;
+  final SaveLocationPicker? saveLocationPicker;
 
   @override
   State<DownloadHomePage> createState() => _DownloadHomePageState();
@@ -181,6 +196,11 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
 
   Future<void> _addDownload() async {
     final rawUrl = _urlController.text.trim();
+    if (rawUrl.isEmpty) {
+      _showMessage('Enter a download URL.');
+      return;
+    }
+
     final uri = Uri.tryParse(rawUrl);
     if (uri == null ||
         !uri.hasAuthority ||
@@ -198,18 +218,33 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       return;
     }
 
-    await _historyInitialization;
     if (!mounted) return;
     setState(() => _choosingLocation = true);
     try {
       final suggestedName = _filenameFromUri(uri);
-      final location = await getSaveLocation(suggestedName: suggestedName);
-      if (!mounted || location == null) return;
+      String? destinationPath;
+      try {
+        destinationPath = await _chooseSavePath(suggestedName);
+      } catch (_) {
+        if (mounted) {
+          _showMessage(
+            'Could not choose a save location. Check that the destination '
+            'is available and you have permission, then try again.',
+          );
+        }
+        return;
+      }
+      if (!mounted || destinationPath == null) return;
+
+      // Let the user choose a destination without waiting on history storage.
+      // Persistence still waits for initialization before creating the record.
+      await _historyInitialization;
+      if (!mounted) return;
 
       final now = DateTime.now();
       final record = DownloadHistoryRecord(
         url: uri.toString(),
-        destinationPath: location.path,
+        destinationPath: destinationPath,
         status: DownloadStatus.downloading.name,
         receivedBytes: 0,
         totalBytes: -1,
@@ -231,7 +266,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       late final DownloadJob job;
       job = DownloadJob(
         url: uri,
-        destinationPath: location.path,
+        destinationPath: destinationPath,
         onChanged: () {
           if (mounted) setState(() {});
           _queuePersistJob(job);
@@ -253,6 +288,14 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
     } finally {
       if (mounted) setState(() => _choosingLocation = false);
     }
+  }
+
+  Future<String?> _chooseSavePath(String suggestedName) async {
+    final picker = widget.saveLocationPicker;
+    if (picker != null) return picker(suggestedName);
+
+    final location = await getSaveLocation(suggestedName: suggestedName);
+    return location?.path;
   }
 
   String _filenameFromUri(Uri uri) {
@@ -329,20 +372,26 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                           Row(
                             children: [
                               Expanded(
-                                child: TextField(
-                                  controller: _urlController,
-                                  keyboardType: TextInputType.url,
-                                  onSubmitted: (_) => _addDownload(),
-                                  decoration: const InputDecoration(
-                                    hintText: 'https://example.com/file.zip',
-                                    labelText: 'Download URL',
-                                    prefixIcon: Icon(Icons.link),
-                                    border: OutlineInputBorder(),
+                                child: Semantics(
+                                  label: 'Download URL',
+                                  textField: true,
+                                  child: TextField(
+                                    controller: _urlController,
+                                    keyboardType: TextInputType.url,
+                                    textInputAction: TextInputAction.go,
+                                    onSubmitted: (_) => _addDownload(),
+                                    decoration: const InputDecoration(
+                                      hintText: 'https://example.com/file.zip',
+                                      labelText: 'Download URL',
+                                      prefixIcon: Icon(Icons.link),
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               FilledButton.icon(
+                                key: const ValueKey('download-action'),
                                 onPressed:
                                     _choosingLocation ? null : _addDownload,
                                 icon: _choosingLocation
