@@ -426,9 +426,20 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _sha256Controller,
+                            keyboardType: TextInputType.visiblePassword,
+                            decoration: const InputDecoration(
+                              labelText: 'Expected SHA-256 (optional)',
+                              hintText: '64 hexadecimal characters',
+                              prefixIcon: Icon(Icons.verified_user_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           Text(
-                            'Choose where to save the file. Downloads begin immediately after the server responds.',
+                            'Only enter a hash from a trusted source. Without one, the file is downloaded but its authenticity is not verified.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
