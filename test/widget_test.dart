@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:download_beast/download_history.dart';
 import 'package:download_beast/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,16 +32,10 @@ void main() {
 
   testWidgets('shows actionable guidance when the save-location picker fails',
       (tester) async {
-    final pickerCalled = Completer<void>();
-    // Use a deterministic in-memory store so this test does not depend on the
-    // host platform's application-support-directory plugin.
-    final historyStore = await DownloadHistoryStore.open(
-      databasePath: ':memory:',
-    );
+    var pickerCalls = 0;
     await tester.pumpWidget(DownloadBeastApp(
-      historyStore: historyStore,
       saveLocationPicker: (_) async {
-        if (!pickerCalled.isCompleted) pickerCalled.complete();
+        pickerCalls++;
         throw Exception('Access denied');
       },
     ));
@@ -54,19 +45,10 @@ void main() {
       'https://example.com/sample.zip',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Download'));
-
-    // History initialization performs asynchronous file/database I/O. Pump
-    // frames while waiting for the picker callback instead of relying on
-    // pumpAndSettle, which can stop before an outstanding future completes.
-    for (var attempt = 0;
-        attempt < 30 && !pickerCalled.isCompleted;
-        attempt++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    expect(pickerCalled.isCompleted, isTrue,
-        reason: 'The save-location picker should be invoked after validation.');
     await tester.pump();
 
+    expect(pickerCalls, 1,
+        reason: 'The save-location picker should be invoked after validation.');
     expect(
       find.text(
         'Could not choose a save location. Check that the destination is '
