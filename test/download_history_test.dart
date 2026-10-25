@@ -28,6 +28,10 @@ void main() {
     int totalBytes = -1,
     String? errorMessage,
     String? etag,
+    String? expectedSha256,
+    String? actualSha256,
+    String integrityStatus = 'notChecked',
+    DateTime? integrityCheckedAt,
   }) {
     final now = DateTime.now();
     return DownloadHistoryRecord(
@@ -38,6 +42,10 @@ void main() {
       totalBytes: totalBytes,
       errorMessage: errorMessage,
       etag: etag,
+      expectedSha256: expectedSha256,
+      actualSha256: actualSha256,
+      integrityStatus: integrityStatus,
+      integrityCheckedAt: integrityCheckedAt,
       createdAt: now,
       updatedAt: now,
     );
@@ -49,6 +57,10 @@ void main() {
       receivedBytes: 120,
       totalBytes: 120,
       etag: '"fixture-v1"',
+      expectedSha256: 'a' * 64,
+      actualSha256: 'a' * 64,
+      integrityStatus: 'verified',
+      integrityCheckedAt: DateTime.utc(2026, 10, 25),
     );
     final id = await store.insert(original);
     await store.close();
@@ -64,6 +76,11 @@ void main() {
     expect(records.single.receivedBytes, 120);
     expect(records.single.totalBytes, 120);
     expect(records.single.etag, '"fixture-v1"');
+    expect(records.single.expectedSha256, 'a' * 64);
+    expect(records.single.actualSha256, 'a' * 64);
+    expect(records.single.integrityStatus, 'verified');
+    expect(records.single.integrityCheckedAt!.millisecondsSinceEpoch,
+        DateTime.utc(2026, 10, 25).millisecondsSinceEpoch);
   });
 
   test('updates status, progress, error details, and updated timestamp', () async {
