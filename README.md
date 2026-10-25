@@ -30,13 +30,17 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
 - [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
-- [ ] **Milestone 11 — Windows release polish and usability:** in progress on `feature/milestone-11-windows-polish`; first test-first slice adds an actionable empty-URL prompt, accessible control-label coverage, and clear save-location/permission failure guidance; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9)
-  - [x] Define a bounded release-polish checklist before UI changes
-  - [x] Add widget tests first for empty URL validation, semantic labels, and save-location picker failure
-  - [x] Implement distinct empty-URL guidance and a user-friendly save-location failure message
+- [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
+- [ ] **Milestone 12 — Download integrity and SHA-256 verification:** implementation and tests in progress on `feature/milestone-12-integrity-verification`; [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
+  - [x] Add SHA-256 verification utility and tests for matching, mismatch, malformed, and missing expected hashes
+  - [x] Verify downloaded byte count against advertised content length and reject incomplete responses
+  - [x] Add optional expected SHA-256 input with format validation and trusted-source guidance
+  - [x] Persist expected/actual hash, status, and verification timestamp in SQLite schema version 3 migration
+  - [x] Display integrity status and hash details in active download cards and history
+  - [x] Add tests for verification outcomes, incomplete responses, and integrity metadata persistence
   - [ ] Verify analysis and tests in CI
-  - [ ] Inspect Windows package and confirm extracted-folder launch
-  - [ ] Complete user-confirmed Windows smoke tests and post-merge CI
+  - [ ] Inspect Windows package and complete user-confirmed smoke tests
+  - [ ] Verify post-merge CI
 
 Latest verified CI on `main`: [Workflow #92](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40141268451), passed Flutter analysis, automated tests, Windows release build, and package upload after the Milestone 10 roadmap update. Milestone 11 work is currently on a feature branch and has not been merged.
 
