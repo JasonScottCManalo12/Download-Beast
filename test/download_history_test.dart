@@ -57,8 +57,8 @@ void main() {
       receivedBytes: 120,
       totalBytes: 120,
       etag: '"fixture-v1"',
-      expectedSha256: 'a' * 64,
-      actualSha256: 'a' * 64,
+      expectedSha256: List.filled(64, 'a').join(),
+      actualSha256: List.filled(64, 'a').join(),
       integrityStatus: 'verified',
       integrityCheckedAt: DateTime.utc(2026, 10, 25),
     );
@@ -76,8 +76,8 @@ void main() {
     expect(records.single.receivedBytes, 120);
     expect(records.single.totalBytes, 120);
     expect(records.single.etag, '"fixture-v1"');
-    expect(records.single.expectedSha256, 'a' * 64);
-    expect(records.single.actualSha256, 'a' * 64);
+    expect(records.single.expectedSha256, List.filled(64, 'a').join());
+    expect(records.single.actualSha256, List.filled(64, 'a').join());
     expect(records.single.integrityStatus, 'verified');
     expect(records.single.integrityCheckedAt!.millisecondsSinceEpoch,
         DateTime.utc(2026, 10, 25).millisecondsSinceEpoch);
