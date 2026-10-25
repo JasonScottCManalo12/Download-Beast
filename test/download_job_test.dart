@@ -125,6 +125,18 @@ void main() {
       }
 
       final bytes = utf8.encode('Download Beast test payload');
+      if (request.uri.path == '/short-length') {
+        request.response.headers.contentLength = bytes.length + 10;
+        request.response.add(bytes);
+        try {
+          await request.response.close();
+        } on HttpException {
+          // The fixture deliberately advertises more bytes than it sends.
+        } on SocketException {
+          // The client may reject the incomplete response.
+        }
+        return;
+      }
       request.response.headers.contentLength = bytes.length;
       request.response.add(bytes);
       await request.response.close();
@@ -486,6 +498,21 @@ void main() {
     expect(job.status, DownloadStatus.completed);
     expect(job.integrityStatus, 'notChecked');
     expect(job.actualSha256, isNull);
+  });
+
+
+  test('rejects an incomplete response whose advertised length is not received', () async {
+    final destination = '${tempDirectory.path}/incomplete.txt';
+    final job = DownloadJob(
+      url: url('/short-length'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start().timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.failed);
+    expect(await File(destination).exists(), isFalse);
   });
 
 }
