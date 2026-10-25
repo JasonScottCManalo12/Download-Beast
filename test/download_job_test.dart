@@ -472,7 +472,7 @@ void main() {
     final job = DownloadJob(
       url: url('/payload'),
       destinationPath: destination,
-      expectedSha256: '0' * 64,
+      expectedSha256: List.filled(64, '0').join(),
       onChanged: () {},
     );
 
