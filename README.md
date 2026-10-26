@@ -32,6 +32,7 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
 - [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
 - [x] **Milestone 12 — Download integrity and SHA-256 verification:** merged to `main` via [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12); [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
+- [ ] **Milestone 13 — Safe segmented downloads:** planned; design-first scope and acceptance criteria tracked in [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13); work branch `feature/milestone-13-segmented-downloads` created from current `main`.
   - [x] Add SHA-256 verification utility and tests for matching, mismatch, malformed, and missing expected hashes
   - [x] Verify downloaded byte count against advertised content length and reject incomplete responses
   - [x] Add optional expected SHA-256 input with format validation and trusted-source guidance
@@ -73,3 +74,7 @@ flutter run -d windows
 ```
 
 The GitHub Actions workflow generates the Windows runner scaffolding during CI, then analyzes, tests, builds the release app, renames the main executable, and uploads the release folder as an artifact.
+
+## Branch review
+
+`feature/fix-cancellation-test` is a stale branch 44 commits behind `main` with two unique commits that only adjust the historical cancellation test's timing/chunk handling. It was reviewed and intentionally left untouched; do not merge it wholesale. The current `main` is the baseline for new work. Other milestone feature branches correspond to already-merged milestones and are retained for now; no branches were deleted.
