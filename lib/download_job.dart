@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'download_integrity.dart';
+import 'segmented_download_engine.dart';
+import 'segmented_download_plan.dart';
 
 enum DownloadStatus { downloading, paused, completed, failed, cancelled }
 
@@ -111,6 +113,13 @@ class DownloadJob {
         ..userAgent = 'DownloadBeast/0.1';
       _client = client;
 
+      if (existingBytes == 0) {
+        final segmented = await _trySegmentedDownload(client, output);
+        if (segmented) {
+          return;
+        }
+      }
+
       final request = await client.getUrl(url);
       if (existingBytes > 0) {
         request.headers.set(HttpHeaders.rangeHeader, 'bytes=$existingBytes-');
@@ -152,7 +161,6 @@ class DownloadJob {
         totalBytes = total;
         append = true;
       } else if (response.statusCode == HttpStatus.ok) {
-        // A server that ignores Range must never be appended to a partial file.
         receivedBytes = 0;
         totalBytes = response.contentLength;
       } else {
@@ -180,20 +188,7 @@ class DownloadJob {
           'Downloaded file length mismatch: expected $totalBytes bytes, received $receivedBytes.',
         );
       }
-      final verification = await verifySha256(
-        output,
-        expectedSha256: expectedSha256,
-      );
-      integrityStatus = verification.status.name;
-      actualSha256 = verification.actualSha256;
-      integrityCheckedAt = DateTime.now();
-      if (verification.message != null &&
-          verification.status != IntegrityStatus.notChecked) {
-        errorMessage = verification.message;
-      } else {
-        errorMessage = null;
-      }
-      status = DownloadStatus.completed;
+      await _verifyCompletedDownload(output);
     } on _DownloadPaused {
       await _closeSinkQuietly(sink);
       sink = null;
@@ -205,6 +200,18 @@ class DownloadJob {
       sink = null;
       await _deletePartialFile(output);
       receivedBytes = 0;
+    } on SegmentedDownloadAborted {
+      await _closeSinkQuietly(sink);
+      sink = null;
+      if (_cancelRequested) {
+        status = DownloadStatus.cancelled;
+        receivedBytes = 0;
+      } else if (_pauseRequested) {
+        status = DownloadStatus.paused;
+      } else {
+        status = DownloadStatus.failed;
+        errorMessage = 'Segmented download was aborted.';
+      }
     } catch (error) {
       await _closeSinkQuietly(sink);
       sink = null;
@@ -227,6 +234,78 @@ class DownloadJob {
       _activeRun = null;
       onChanged();
     }
+  }
+
+  Future<bool> _trySegmentedDownload(HttpClient client, File output) async {
+    final probeClient = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 20)
+      ..idleTimeout = const Duration(seconds: 30)
+      ..userAgent = 'DownloadBeast/0.1';
+    try {
+      final request = await probeClient.getUrl(url);
+      request.headers
+        ..set(HttpHeaders.rangeHeader, 'bytes=0-0')
+        ..set(HttpHeaders.acceptEncodingHeader, 'identity');
+      final response = await request.close();
+      final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
+      final tag = response.headers.value(HttpHeaders.etagHeader);
+      if (response.statusCode != HttpStatus.partialContent ||
+          response.contentLength != 1 ||
+          !isValidRangeProbe(
+            statusCode: response.statusCode,
+            contentRange: contentRange,
+            bodyLength: 1,
+            entityTag: tag,
+          )) {
+        await response.drain<void>();
+        return false;
+      }
+      await response.drain<void>();
+
+      final parsed = parseContentRange(contentRange);
+      if (parsed == null || parsed.total < minimumSegmentedDownloadBytes) {
+        return false;
+      }
+      if (_cancelRequested) throw const _DownloadCancelled();
+      if (_pauseRequested) throw const _DownloadPaused();
+
+      totalBytes = parsed.total;
+      entityTag = tag;
+      await downloadSegmentedToFile(
+        client: client,
+        uri: url,
+        destination: output,
+        totalBytes: parsed.total,
+        entityTag: tag!,
+        shouldAbort: () => _cancelRequested || _pauseRequested,
+        onProgress: (received, total) {
+          receivedBytes = received;
+          totalBytes = total;
+          onChanged();
+        },
+      );
+      await _verifyCompletedDownload(output);
+      return true;
+    } finally {
+      probeClient.close(force: true);
+    }
+  }
+
+  Future<void> _verifyCompletedDownload(File output) async {
+    final verification = await verifySha256(
+      output,
+      expectedSha256: expectedSha256,
+    );
+    integrityStatus = verification.status.name;
+    actualSha256 = verification.actualSha256;
+    integrityCheckedAt = DateTime.now();
+    if (verification.message != null &&
+        verification.status != IntegrityStatus.notChecked) {
+      errorMessage = verification.message;
+    } else {
+      errorMessage = null;
+    }
+    status = DownloadStatus.completed;
   }
 
   String _describeError(Object error) {
