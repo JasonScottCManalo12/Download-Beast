@@ -242,6 +242,23 @@ class DownloadJob {
       ..idleTimeout = const Duration(seconds: 30)
       ..userAgent = 'DownloadBeast/0.1';
     try {
+      // Avoid a range probe for small known representations. A probe can have
+      // observable side effects on servers and should not become a second
+      // download attempt for ordinary files.
+      final headRequest = await probeClient.openUrl('HEAD', url);
+      final headResponse = await headRequest.close();
+      final headLength = headResponse.contentLength;
+      final headStatus = headResponse.statusCode;
+      await headResponse.drain<void>();
+      if (headStatus == HttpStatus.ok &&
+          headLength >= 0 &&
+          headLength < minimumSegmentedDownloadBytes) {
+        return false;
+      }
+      if (headStatus != HttpStatus.ok && headStatus != HttpStatus.methodNotAllowed) {
+        return false;
+      }
+
       final request = await probeClient.getUrl(url);
       request.headers
         ..set(HttpHeaders.rangeHeader, 'bytes=0-0')
@@ -257,7 +274,9 @@ class DownloadJob {
             bodyLength: 1,
             entityTag: tag,
           )) {
-        await response.drain<void>();
+        // Do not drain an ignored-range response: it may be a large or
+        // streaming body. The probe client is force-closed below and the
+        // normal single-connection path makes the actual download request.
         return false;
       }
       await response.drain<void>();
