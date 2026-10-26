@@ -31,20 +31,18 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
 - [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
-- [ ] **Milestone 12 — Download integrity and SHA-256 verification:** implementation and automated tests are green on `feature/milestone-12-integrity-verification`; Windows smoke testing is partially complete; [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11), [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12)
+- [x] **Milestone 12 — Download integrity and SHA-256 verification:** merged to `main` via [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12); [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
   - [x] Add SHA-256 verification utility and tests for matching, mismatch, malformed, and missing expected hashes
   - [x] Verify downloaded byte count against advertised content length and reject incomplete responses
   - [x] Add optional expected SHA-256 input with format validation and trusted-source guidance
-  - [x] Persist expected/actual hash, status, and verification timestamp in SQLite schema version 3 migration
-  - [x] Display integrity status and hash details in active download cards and history
+  - [x] Persist expected/actual hashes, status, and verification timestamp in SQLite schema version 3 migration
+  - [x] Display integrity status and hash details in active downloads and history
   - [x] Add tests for verification outcomes, incomplete responses, and integrity metadata persistence
-  - [x] Verify Flutter analysis, 39 automated tests, Windows release build, and artifact upload in CI #130
-  - [x] Inspect Windows package contents; user confirmed launch, dashboard, download, unchecked-hash state, and persistent history
-  - [ ] User-confirmed smoke tests for matching and mismatching expected SHA-256
-  - [ ] Merge PR #12 after hash-verification smoke tests
-  - [ ] Verify post-merge CI
+  - [x] Pass Flutter analysis, 39 automated tests, Windows release build, and artifact upload in CI #130
+  - [x] Inspect Windows package; user confirmed app launch, dashboard, download, unchecked-hash state, persistent history, matching hash `Verified`, and incorrect hash `Hash mismatch`
+  - [ ] Verify post-merge CI on `main`
 
-Latest Milestone 12 validation: [Workflow #130](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40254266063) passed analysis, 39 automated tests, Windows release build, and artifact upload on the Milestone 12 branch. PR #12 remains open pending the two remaining user smoke tests for matching and mismatching expected hashes.
+Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCManalo12/Download-Beast/commit/0ce549a556c9353b79578a6b6863e765cf0a9266). Branch CI and Windows package validation passed; post-merge CI is running: [Workflow #133](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259651239).
 
 ## Not implemented yet
 
