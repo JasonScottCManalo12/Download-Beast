@@ -121,7 +121,7 @@ class DownloadJob {
         totalBytes = total;
         append = true;
       } else if (response.statusCode == HttpStatus.ok) {
-        if (existingBytes > 0 && entityTag != null && responseEtag != entityTag) {
+        if (entityTag != null && responseEtag != entityTag) {
           await response.drain<void>();
           throw const HttpException('The remote file changed; resume was rejected.');
         }
@@ -139,6 +139,10 @@ class DownloadJob {
         sink.add(chunk);
         receivedBytes += chunk.length;
         onChanged();
+        // Give pause/cancel callers a chance to run before consuming the next
+        // buffered response chunk. This makes lifecycle controls cooperative
+        // without changing the download data path.
+        await Future<void>.delayed(Duration.zero);
       }
       if (_cancelRequested) throw const _DownloadCancelled();
       if (_pauseRequested) throw const _DownloadPaused();
@@ -211,7 +215,10 @@ class DownloadJob {
           isValidRangeProbe(statusCode: response.statusCode, contentRange: contentRange, bodyLength: 1, entityTag: tag)) {
         await response.drain<void>();
         final parsed = parseContentRange(contentRange);
-        if (parsed == null || parsed.total < minimumSegmentedDownloadBytes) return false;
+        if (parsed == null || parsed.total < minimumSegmentedDownloadBytes) {
+          entityTag = tag;
+          return false;
+        }
         if (_cancelRequested) throw const _DownloadCancelled();
         if (_pauseRequested) throw const _DownloadPaused();
         totalBytes = parsed.total;
