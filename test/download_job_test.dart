@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:download_beast/download_job.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -124,6 +125,18 @@ void main() {
       }
 
       final bytes = utf8.encode('Download Beast test payload');
+      if (request.uri.path == '/short-length') {
+        request.response.headers.contentLength = bytes.length + 10;
+        request.response.add(bytes);
+        try {
+          await request.response.close();
+        } on HttpException {
+          // The fixture deliberately advertises more bytes than it sends.
+        } on SocketException {
+          // The client may reject the incomplete response.
+        }
+        return;
+      }
       request.response.headers.contentLength = bytes.length;
       request.response.add(bytes);
       await request.response.close();
@@ -430,6 +443,75 @@ void main() {
     await job.retry();
     expect(job.status, DownloadStatus.failed);
     expect(job.errorMessage, contains('503'));
+    expect(await File(destination).exists(), isFalse);
+  });
+
+
+  test('reports verified SHA-256 when expected hash matches downloaded bytes', () async {
+    const payload = 'Download Beast test payload';
+    final expected = sha256.convert(utf8.encode(payload)).toString();
+    final destination = '${tempDirectory.path}/verified.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      expectedSha256: expected,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.integrityStatus, 'verified');
+    expect(job.actualSha256, expected);
+    expect(job.integrityCheckedAt, isNotNull);
+    expect(await File(destination).readAsString(), payload);
+  });
+
+  test('reports hash mismatch without deleting the completed file', () async {
+    final destination = '${tempDirectory.path}/mismatch.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      expectedSha256: List.filled(64, '0').join(),
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.integrityStatus, 'mismatch');
+    expect(job.actualSha256, isNotNull);
+    expect(job.errorMessage, contains('does not match'));
+    expect(await File(destination).exists(), isTrue);
+  });
+
+  test('does not claim hash verification when no expected hash is supplied', () async {
+    final destination = '${tempDirectory.path}/unchecked.txt';
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.integrityStatus, 'notChecked');
+    expect(job.actualSha256, isNull);
+  });
+
+
+  test('rejects an incomplete response whose advertised length is not received', () async {
+    final destination = '${tempDirectory.path}/incomplete.txt';
+    final job = DownloadJob(
+      url: url('/short-length'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+
+    await job.start().timeout(const Duration(seconds: 10));
+
+    expect(job.status, DownloadStatus.failed);
     expect(await File(destination).exists(), isFalse);
   });
 

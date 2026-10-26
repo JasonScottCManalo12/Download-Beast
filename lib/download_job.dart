@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'download_integrity.dart';
+
 enum DownloadStatus { downloading, paused, completed, failed, cancelled }
 
 class DownloadJob {
@@ -10,11 +12,13 @@ class DownloadJob {
     required this.url,
     required this.destinationPath,
     required this.onChanged,
+    this.expectedSha256,
   });
 
   final Uri url;
   final String destinationPath;
   final VoidCallback onChanged;
+  final String? expectedSha256;
   int? historyId;
 
   HttpClient? _client;
@@ -27,6 +31,9 @@ class DownloadJob {
   int receivedBytes = 0;
   int totalBytes = -1;
   String? errorMessage;
+  String integrityStatus = IntegrityStatus.notChecked.name;
+  String? actualSha256;
+  DateTime? integrityCheckedAt;
 
   double? get progress => totalBytes > 0
       ? (receivedBytes / totalBytes).clamp(0.0, 1.0).toDouble()
@@ -168,8 +175,25 @@ class DownloadJob {
       await sink.flush();
       await sink.close();
       sink = null;
+      if (totalBytes >= 0 && receivedBytes != totalBytes) {
+        throw HttpException(
+          'Downloaded file length mismatch: expected $totalBytes bytes, received $receivedBytes.',
+        );
+      }
+      final verification = await verifySha256(
+        output,
+        expectedSha256: expectedSha256,
+      );
+      integrityStatus = verification.status.name;
+      actualSha256 = verification.actualSha256;
+      integrityCheckedAt = DateTime.now();
+      if (verification.message != null &&
+          verification.status != IntegrityStatus.notChecked) {
+        errorMessage = verification.message;
+      } else {
+        errorMessage = null;
+      }
       status = DownloadStatus.completed;
-      errorMessage = null;
     } on _DownloadPaused {
       await _closeSinkQuietly(sink);
       sink = null;

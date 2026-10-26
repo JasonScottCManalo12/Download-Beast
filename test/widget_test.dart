@@ -26,8 +26,8 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const DownloadBeastApp());
 
-    expect(find.bySemanticsLabel('Download URL'), findsOneWidget);
-    expect(find.bySemanticsLabel('Download'), findsOneWidget);
+    expect(find.bySemanticsLabel('Download URL'), findsWidgets);
+    expect(find.bySemanticsLabel(RegExp(r'^Download$')), findsOneWidget);
   });
 
   testWidgets('shows actionable guidance when the save-location picker fails',
@@ -41,7 +41,7 @@ void main() {
     ));
 
     await tester.enterText(
-      find.byType(TextField),
+      find.byType(TextField).first,
       'https://example.com/sample.zip',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Download'));
@@ -63,7 +63,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const DownloadBeastApp());
 
-    await tester.enterText(find.byType(TextField), 'file:///private/file.txt');
+    await tester.enterText(
+      find.byType(TextField).first,
+      'file:///private/file.txt',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Download'));
     await tester.pump();
 

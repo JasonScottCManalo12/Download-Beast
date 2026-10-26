@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'download_history.dart';
+import 'download_integrity.dart';
 import 'download_job.dart';
 import 'file_identity.dart';
 import 'youtube_metadata.dart';
@@ -62,6 +63,7 @@ class DownloadHomePage extends StatefulWidget {
 
 class _DownloadHomePageState extends State<DownloadHomePage> {
   final _urlController = TextEditingController();
+  final _sha256Controller = TextEditingController();
   final List<DownloadJob> _jobs = [];
   final List<DownloadHistoryRecord> _historyRecords = [];
   DownloadHistoryStore? _historyStore;
@@ -110,6 +112,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
     job = DownloadJob(
       url: uri,
       destinationPath: record.destinationPath,
+      expectedSha256: record.expectedSha256,
       onChanged: () {
         if (mounted) setState(() {});
         _queuePersistJob(job);
@@ -135,6 +138,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
     job = DownloadJob(
       url: uri,
       destinationPath: record.destinationPath,
+      expectedSha256: record.expectedSha256,
       onChanged: () {
         if (mounted) setState(() {});
         _queuePersistJob(job);
@@ -163,6 +167,12 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       clearErrorMessage: job.errorMessage == null,
       etag: job.entityTag,
       clearEtag: job.entityTag == null,
+      expectedSha256: job.expectedSha256,
+      actualSha256: job.actualSha256,
+      clearActualSha256: job.actualSha256 == null,
+      integrityStatus: job.integrityStatus,
+      integrityCheckedAt: job.integrityCheckedAt,
+      clearIntegrityCheckedAt: job.integrityCheckedAt == null,
       updatedAt: DateTime.now(),
     );
     _persistenceChain = _persistenceChain.then((_) async {
@@ -184,6 +194,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
   @override
   void dispose() {
     _urlController.dispose();
+    _sha256Controller.dispose();
     final store = _historyStore;
     if (store != null) {
       _persistenceChain = _persistenceChain.then((_) => store.close());
@@ -196,6 +207,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
 
   Future<void> _addDownload() async {
     final rawUrl = _urlController.text.trim();
+    final rawExpectedSha256 = _sha256Controller.text.trim();
     if (rawUrl.isEmpty) {
       _showMessage('Enter a download URL.');
       return;
@@ -206,6 +218,11 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
         !uri.hasAuthority ||
         (uri.scheme != 'http' && uri.scheme != 'https')) {
       _showMessage('Enter a valid HTTP or HTTPS URL.');
+      return;
+    }
+
+    if (rawExpectedSha256.isNotEmpty && !isValidSha256(rawExpectedSha256)) {
+      _showMessage('Expected SHA-256 must contain exactly 64 hexadecimal characters.');
       return;
     }
 
@@ -248,6 +265,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
         status: DownloadStatus.downloading.name,
         receivedBytes: 0,
         totalBytes: -1,
+        expectedSha256: rawExpectedSha256.isEmpty ? null : rawExpectedSha256.toLowerCase(),
         createdAt: now,
         updatedAt: now,
       );
@@ -267,6 +285,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
       job = DownloadJob(
         url: uri,
         destinationPath: destinationPath,
+        expectedSha256: rawExpectedSha256.isEmpty ? null : rawExpectedSha256.toLowerCase(),
         onChanged: () {
           if (mounted) setState(() {});
           _queuePersistJob(job);
@@ -279,6 +298,7 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
           _historyRecords.insert(0, record.copyWith(id: historyId));
         }
         _urlController.clear();
+        _sha256Controller.clear();
         _choosingLocation = false;
       });
 
@@ -406,9 +426,20 @@ class _DownloadHomePageState extends State<DownloadHomePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _sha256Controller,
+                            keyboardType: TextInputType.visiblePassword,
+                            decoration: const InputDecoration(
+                              labelText: 'Expected SHA-256 (optional)',
+                              hintText: '64 hexadecimal characters',
+                              prefixIcon: Icon(Icons.verified_user_outlined),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           Text(
-                            'Choose where to save the file. Downloads begin immediately after the server responds.',
+                            'Only enter a hash from a trusted source. Without one, the file is downloaded but its authenticity is not verified.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -704,6 +735,12 @@ class _DownloadCard extends StatelessWidget {
                 ],
               ],
             ),
+            Text(
+              'Integrity: ${_integrityLabel(job.integrityStatus)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (job.actualSha256 != null)
+              SelectableText('SHA-256: ${job.actualSha256}'),
             if (job.errorMessage != null)
               Text(job.errorMessage!,
                   style: TextStyle(
@@ -785,9 +822,14 @@ class _HistoryCard extends StatelessWidget {
                       Text(_formatBytes(record.receivedBytes)),
                       if (record.totalBytes > 0)
                         Text('of ${_formatBytes(record.totalBytes)}'),
+                      Text('Integrity: ${_integrityLabel(record.integrityStatus)}'),
                       Text(_formatDate(record.updatedAt)),
                     ],
                   ),
+                  if (record.expectedSha256 != null)
+                    SelectableText('Expected SHA-256: ${record.expectedSha256}'),
+                  if (record.actualSha256 != null)
+                    SelectableText('Actual SHA-256: ${record.actualSha256}'),
                   if (record.errorMessage != null) ...[
                     const SizedBox(height: 4),
                     Text(record.errorMessage!,
@@ -815,6 +857,14 @@ class _HistoryCard extends StatelessWidget {
     );
   }
 }
+
+String _integrityLabel(String status) => switch (status) {
+      'verified' => 'Verified',
+      'mismatch' => 'Hash mismatch',
+      'unavailable' => 'Unavailable',
+      'notChecked' => 'Not checked',
+      _ => status,
+    };
 
 String _formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes B';

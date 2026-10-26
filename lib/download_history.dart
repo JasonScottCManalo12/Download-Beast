@@ -16,6 +16,10 @@ class DownloadHistoryRecord {
     required this.updatedAt,
     this.errorMessage,
     this.etag,
+    this.expectedSha256,
+    this.actualSha256,
+    this.integrityStatus = 'notChecked',
+    this.integrityCheckedAt,
   });
 
   final int? id;
@@ -26,6 +30,10 @@ class DownloadHistoryRecord {
   final int totalBytes;
   final String? errorMessage;
   final String? etag;
+  final String? expectedSha256;
+  final String? actualSha256;
+  final String integrityStatus;
+  final DateTime? integrityCheckedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -40,6 +48,12 @@ class DownloadHistoryRecord {
     bool clearErrorMessage = false,
     String? etag,
     bool clearEtag = false,
+    String? expectedSha256,
+    String? actualSha256,
+    bool clearActualSha256 = false,
+    String? integrityStatus,
+    DateTime? integrityCheckedAt,
+    bool clearIntegrityCheckedAt = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -52,6 +66,10 @@ class DownloadHistoryRecord {
       totalBytes: totalBytes ?? this.totalBytes,
       errorMessage: clearErrorMessage ? null : errorMessage ?? this.errorMessage,
       etag: clearEtag ? null : etag ?? this.etag,
+      expectedSha256: expectedSha256 ?? this.expectedSha256,
+      actualSha256: clearActualSha256 ? null : actualSha256 ?? this.actualSha256,
+      integrityStatus: integrityStatus ?? this.integrityStatus,
+      integrityCheckedAt: clearIntegrityCheckedAt ? null : integrityCheckedAt ?? this.integrityCheckedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -65,6 +83,10 @@ class DownloadHistoryRecord {
         'total_bytes': totalBytes,
         'error_message': errorMessage,
         'etag': etag,
+        'expected_sha256': expectedSha256,
+        'actual_sha256': actualSha256,
+        'integrity_status': integrityStatus,
+        'integrity_checked_at': integrityCheckedAt?.millisecondsSinceEpoch,
         'created_at': createdAt.millisecondsSinceEpoch,
         'updated_at': updatedAt.millisecondsSinceEpoch,
       };
@@ -79,6 +101,10 @@ class DownloadHistoryRecord {
       totalBytes: map['total_bytes'] as int,
       errorMessage: map['error_message'] as String?,
       etag: map['etag'] as String?,
+      expectedSha256: map['expected_sha256'] as String?,
+      actualSha256: map['actual_sha256'] as String?,
+      integrityStatus: map['integrity_status'] as String? ?? 'notChecked',
+      integrityCheckedAt: map['integrity_checked_at'] == null ? null : DateTime.fromMillisecondsSinceEpoch(map['integrity_checked_at'] as int),
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
     );
@@ -107,7 +133,7 @@ class DownloadHistoryStore {
     final database = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onCreate: (db, version) async {
           await db.execute('''
             CREATE TABLE download_history (
@@ -119,6 +145,10 @@ class DownloadHistoryStore {
               total_bytes INTEGER NOT NULL DEFAULT -1,
               error_message TEXT,
               etag TEXT,
+              expected_sha256 TEXT,
+              actual_sha256 TEXT,
+              integrity_status TEXT NOT NULL DEFAULT 'notChecked',
+              integrity_checked_at INTEGER,
               created_at INTEGER NOT NULL,
               updated_at INTEGER NOT NULL
             )
@@ -131,6 +161,12 @@ class DownloadHistoryStore {
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
             await db.execute('ALTER TABLE download_history ADD COLUMN etag TEXT');
+          }
+          if (oldVersion < 3) {
+            await db.execute('ALTER TABLE download_history ADD COLUMN expected_sha256 TEXT');
+            await db.execute('ALTER TABLE download_history ADD COLUMN actual_sha256 TEXT');
+            await db.execute("ALTER TABLE download_history ADD COLUMN integrity_status TEXT NOT NULL DEFAULT 'notChecked'");
+            await db.execute('ALTER TABLE download_history ADD COLUMN integrity_checked_at INTEGER');
           }
         },
       ),
