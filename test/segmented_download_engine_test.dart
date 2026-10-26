@@ -189,4 +189,32 @@ void main() {
 
     expect(await destination.exists(), isFalse);
   });
+
+  test('cancels a segmented transfer and cleans temporary segment state', () async {
+    final destination = File('${tempDirectory.path}/cancelled.bin');
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+    var abortChecks = 0;
+
+    await expectLater(
+      downloadSegmentedToFile(
+        client: client,
+        uri: buildUrl(),
+        destination: destination,
+        totalBytes: payload.length,
+        entityTag: '"stable-v1"',
+        segmentSizeBytes: 5,
+        maxConcurrentSegments: 1,
+        shouldAbort: () => ++abortChecks >= 3,
+      ),
+      throwsA(isA<SegmentedDownloadAborted>()),
+    );
+
+    expect(await destination.exists(), isFalse);
+    final leftovers = tempDirectory
+        .listSync()
+        .where((entry) => entry.path.contains('.download-beast-segments-'));
+    expect(leftovers, isEmpty);
+  });
+
 }
