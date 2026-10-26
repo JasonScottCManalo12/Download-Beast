@@ -78,6 +78,10 @@ class DownloadJob {
     try {
       if (_cancelRequested) throw const _DownloadCancelled();
       if (_pauseRequested) throw const _DownloadPaused();
+      final parent = output.parent;
+      if (!await parent.exists()) {
+        throw FileSystemException('Save directory does not exist.', output.path);
+      }
       final existingBytes = await output.exists() ? await output.length() : 0;
       receivedBytes = existingBytes;
       final client = HttpClient()
@@ -140,7 +144,7 @@ class DownloadJob {
         sink.add(chunk);
         receivedBytes += chunk.length;
         onChanged();
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(const Duration(milliseconds: 1));
       }
       if (_cancelRequested) throw const _DownloadCancelled();
       if (_pauseRequested) throw const _DownloadPaused();
