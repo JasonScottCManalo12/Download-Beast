@@ -126,7 +126,6 @@ void main() {
       }
     });
   });
-}
 
   group('isValidRangeProbe', () {
     test('accepts only a valid one-byte partial response with a strong ETag', () {
