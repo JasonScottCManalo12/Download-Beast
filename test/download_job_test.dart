@@ -7,6 +7,8 @@ import 'package:download_beast/download_job.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final _rangePayload = List<int>.generate(256 * 1024, (index) => index % 251);
+final _segmentedPayload =
+    List<int>.generate(8 * 1024 * 1024 + 123, (index) => index % 239);
 
 void main() {
   late HttpServer server;
@@ -27,6 +29,37 @@ void main() {
     missingRouteCount = 0;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      if (request.uri.path == '/segmented-payload') {
+        final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+        final match = rangeHeader == null
+            ? null
+            : RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
+        if (match == null) {
+          request.response.statusCode = HttpStatus.badRequest;
+          await request.response.close();
+          return;
+        }
+        final start = int.parse(match.group(1)!);
+        final end = int.parse(match.group(2)!);
+        if (start < 0 || end < start || end >= _segmentedPayload.length) {
+          request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+          await request.response.close();
+          return;
+        }
+        request.response.statusCode = HttpStatus.partialContent;
+        request.response.headers
+          ..set(HttpHeaders.acceptRangesHeader, 'bytes')
+          ..set(HttpHeaders.etagHeader, '"segmented-v1"')
+          ..set(
+            HttpHeaders.contentRangeHeader,
+            'bytes $start-$end/${_segmentedPayload.length}',
+          )
+          ..contentLength = end - start + 1;
+        request.response.add(_segmentedPayload.sublist(start, end + 1));
+        await request.response.close();
+        return;
+      }
+
       if (request.uri.path == '/range-payload' ||
           request.uri.path == '/ignore-range' ||
           request.uri.path == '/bad-range' ||
@@ -157,6 +190,25 @@ void main() {
   Uri url(String path) =>
       Uri.parse('http://${server.address.address}:${server.port}$path');
 
+  test('uses segmented download for a large strong-ETag range-capable file', () async {
+    final destination = '${tempDirectory.path}/segmented-payload.bin';
+    final progressValues = <int>[];
+    final job = DownloadJob(
+      url: url('/segmented-payload'),
+      destinationPath: destination,
+      onChanged: () => progressValues.add(job.receivedBytes),
+    );
+
+    await job.start().timeout(const Duration(seconds: 30));
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.totalBytes, _segmentedPayload.length);
+    expect(job.receivedBytes, _segmentedPayload.length);
+    expect(job.progress, 1.0);
+    expect(progressValues, isNotEmpty);
+    expect(await File(destination).readAsBytes(), _segmentedPayload);
+  });
+
   test('pause preserves partial bytes and resume completes with HTTP Range', () async {
     final destination = '${tempDirectory.path}/range-payload.bin';
     final firstChunkReceived = Completer<void>();
@@ -273,6 +325,7 @@ void main() {
     expect(job.errorMessage, contains('remote file changed'));
     expect(await File(destination).exists(), isFalse);
   });
+
   test('downloads a file and reports completed progress', () async {
     final destination = '${tempDirectory.path}/payload.txt';
     var changeCount = 0;
@@ -446,7 +499,6 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
-
   test('reports verified SHA-256 when expected hash matches downloaded bytes', () async {
     const payload = 'Download Beast test payload';
     final expected = sha256.convert(utf8.encode(payload)).toString();
@@ -500,7 +552,6 @@ void main() {
     expect(job.actualSha256, isNull);
   });
 
-
   test('rejects an incomplete response whose advertised length is not received', () async {
     final destination = '${tempDirectory.path}/incomplete.txt';
     final job = DownloadJob(
@@ -514,5 +565,4 @@ void main() {
     expect(job.status, DownloadStatus.failed);
     expect(await File(destination).exists(), isFalse);
   });
-
 }
