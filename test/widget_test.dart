@@ -27,7 +27,7 @@ void main() {
     await tester.pumpWidget(const DownloadBeastApp());
 
     expect(find.bySemanticsLabel('Download URL'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'^Download);
+    expect(find.bySemanticsLabel(RegExp(r'^Download$')), findsOneWidget);
   });
 
   testWidgets('shows actionable guidance when the save-location picker fails',
@@ -63,51 +63,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const DownloadBeastApp());
 
-    await tester.enterText(find.byType(TextField).first, 'file:///private/file.txt');
-    await tester.tap(find.widgetWithText(FilledButton, 'Download'));
-    await tester.pump();
-
-    expect(find.text('Enter a valid HTTP or HTTPS URL.'), findsOneWidget);
-    expect(find.text('No downloads yet'), findsOneWidget);
-  });
-}
-)), findsOneWidget);
-  });
-
-  testWidgets('shows actionable guidance when the save-location picker fails',
-      (tester) async {
-    var pickerCalls = 0;
-    await tester.pumpWidget(DownloadBeastApp(
-      saveLocationPicker: (_) async {
-        pickerCalls++;
-        throw Exception('Access denied');
-      },
-    ));
-
     await tester.enterText(
       find.byType(TextField).first,
-      'https://example.com/sample.zip',
+      'file:///private/file.txt',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Download'));
-    await tester.pump();
-
-    expect(pickerCalls, 1,
-        reason: 'The save-location picker should be invoked after validation.');
-    expect(
-      find.text(
-        'Could not choose a save location. Check that the destination is '
-        'available and you have permission, then try again.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('No downloads yet'), findsOneWidget);
-  });
-
-  testWidgets('rejects non-HTTP URLs without opening the save picker',
-      (tester) async {
-    await tester.pumpWidget(const DownloadBeastApp());
-
-    await tester.enterText(find.byType(TextField).first, 'file:///private/file.txt');
     await tester.tap(find.widgetWithText(FilledButton, 'Download'));
     await tester.pump();
 
