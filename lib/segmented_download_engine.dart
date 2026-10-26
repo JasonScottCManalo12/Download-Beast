@@ -2,11 +2,16 @@ import 'dart:io';
 
 import 'segmented_download_plan.dart';
 
+/// Thrown when the owning DownloadJob asks a segmented transfer to stop.
+class SegmentedDownloadAborted implements Exception {
+  const SegmentedDownloadAborted();
+}
+
 /// Downloads a known-length representation in parallel to temporary segment
 /// files, then assembles the verified byte ranges in order.
 ///
-/// This engine is deliberately separate from DownloadJob until pause, resume,
-/// cancellation, history, and UI progress are integrated.
+/// The caller supplies lifecycle callbacks so DownloadJob can expose progress
+/// and cancellation without coupling this engine to Flutter UI state.
 Future<void> downloadSegmentedToFile({
   required HttpClient client,
   required Uri uri,
@@ -15,6 +20,8 @@ Future<void> downloadSegmentedToFile({
   required String entityTag,
   int segmentSizeBytes = defaultSegmentSizeBytes,
   int maxConcurrentSegments = defaultMaxConcurrentSegments,
+  bool Function()? shouldAbort,
+  void Function(int receivedBytes, int totalBytes)? onProgress,
 }) async {
   if (totalBytes <= 0) {
     throw ArgumentError.value(totalBytes, 'totalBytes', 'Must be positive.');
@@ -47,9 +54,17 @@ Future<void> downloadSegmentedToFile({
 
   try {
     var nextRangeIndex = 0;
+    var completedBytes = 0;
+
+    void checkAborted() {
+      if (shouldAbort?.call() ?? false) {
+        throw const SegmentedDownloadAborted();
+      }
+    }
 
     Future<void> worker() async {
       while (true) {
+        checkAborted();
         final index = nextRangeIndex++;
         if (index >= ranges.length) return;
         final range = ranges[index];
@@ -88,11 +103,13 @@ Future<void> downloadSegmentedToFile({
         try {
           sink = segmentFile.openWrite();
           await for (final chunk in response) {
+            checkAborted();
             written += chunk.length;
             if (written > range.length) {
               throw const HttpException('Segment body exceeded its declared range.');
             }
             sink.add(chunk);
+            onProgress?.call(completedBytes + written, totalBytes);
           }
           await sink.flush();
           await sink.close();
@@ -112,6 +129,8 @@ Future<void> downloadSegmentedToFile({
             uri: uri,
           );
         }
+        completedBytes += written;
+        onProgress?.call(completedBytes, totalBytes);
       }
     }
 
@@ -119,10 +138,12 @@ Future<void> downloadSegmentedToFile({
         ? maxConcurrentSegments
         : ranges.length;
     await Future.wait(List<Future<void>>.generate(workerCount, (_) => worker()));
+    checkAborted();
 
     final output = assembled.openWrite();
     try {
       for (var index = 0; index < ranges.length; index++) {
+        checkAborted();
         await output.addStream(
           File(
             '${workDirectory.path}${Platform.pathSeparator}segment-$index.part',
@@ -138,9 +159,6 @@ Future<void> downloadSegmentedToFile({
       throw const HttpException('Assembled file length does not match the representation size.');
     }
 
-    // Preserve an existing destination until the assembled file has been
-    // promoted successfully. Rename within the same parent directory so the
-    // backup and destination remain on the same filesystem.
     File? backup;
     if (await destination.exists()) {
       backup = File(
@@ -152,8 +170,6 @@ Future<void> downloadSegmentedToFile({
     try {
       await assembled.rename(destination.path);
     } on Object {
-      // Best-effort rollback if promotion fails. If rollback also fails, keep
-      // the backup file rather than deleting the user's previous download.
       if (backup != null && await backup.exists() && !await destination.exists()) {
         try {
           await backup.rename(destination.path);
@@ -168,6 +184,7 @@ Future<void> downloadSegmentedToFile({
     if (backup != null && await backup.exists()) {
       await backup.delete();
     }
+    onProgress?.call(totalBytes, totalBytes);
   } finally {
     if (await assembled.exists()) await assembled.delete();
     if (await workDirectory.exists()) {
