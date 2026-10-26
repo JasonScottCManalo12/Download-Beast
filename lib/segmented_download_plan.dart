@@ -81,7 +81,7 @@ class ParsedContentRange {
 ParsedContentRange? parseContentRange(String? value) {
   if (value == null) return null;
   final match =
-      RegExp(r'^bytes (\d+)-(\d+)/(\d+)).firstMatch(value.trim());
+      RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(value.trim());
   if (match == null) return null;
 
   final start = int.tryParse(match.group(1)!);
