@@ -68,32 +68,56 @@ void main() {
         rangeRequestHeaders.add(rangeHeader ?? '');
         final honorRange = request.uri.path != '/ignore-range';
         var start = 0;
+        var endInclusive = _rangePayload.length - 1;
+        var isRangeRequest = false;
         if (honorRange && rangeHeader != null) {
-          final match = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
-          if (match != null) start = int.parse(match.group(1)!);
+          final closedRange = RegExp(r'^bytes=(\\d+)-(\\d+)$').firstMatch(rangeHeader);
+          final openRange = RegExp(r'^bytes=(\\d+)-$').firstMatch(rangeHeader);
+          if (closedRange != null) {
+            start = int.parse(closedRange.group(1)!);
+            endInclusive = int.parse(closedRange.group(2)!);
+            isRangeRequest = true;
+          } else if (openRange != null) {
+            start = int.parse(openRange.group(1)!);
+            isRangeRequest = true;
+          }
         }
-        final routeNumber = ++rangeRouteCount;
+        if (start < 0 ||
+            endInclusive < start ||
+            start >= _rangePayload.length ||
+            endInclusive >= _rangePayload.length) {
+          request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+          await request.response.close();
+          return;
+        }
         request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
-        final responseEtag = request.uri.path == '/changed-etag' && routeNumber > 1
-            ? '"fixture-v2"'
-            : '"fixture-v1"';
+        final isResumeRange = rangeHeader != null &&
+            RegExp(r'^bytes=[1-9]\\d*-$').hasMatch(rangeHeader);
+        final responseEtag =
+            request.uri.path == '/changed-etag' && isResumeRange
+                ? '"fixture-v2"'
+                : '"fixture-v1"';
         request.response.headers.set(HttpHeaders.etagHeader, responseEtag);
-        if (start > 0) {
+        if (isRangeRequest) {
           request.response.statusCode = HttpStatus.partialContent;
+          final reportedStart =
+              request.uri.path == '/bad-range' ? start + 1 : start;
           request.response.headers.set(
             HttpHeaders.contentRangeHeader,
-            'bytes ${request.uri.path == '/bad-range' ? start + 1 : start}-${_rangePayload.length - 1}/${_rangePayload.length}',
+            'bytes $reportedStart-$endInclusive/${_rangePayload.length}',
           );
         }
-        request.response.contentLength = _rangePayload.length - start;
+        final bytes = _rangePayload.sublist(start, endInclusive + 1);
+        request.response.contentLength = bytes.length;
         request.response.bufferOutput = false;
-        for (var offset = start; offset < _rangePayload.length; offset += 8192) {
-          final end = (offset + 8192 < _rangePayload.length)
+        for (var offset = 0; offset < bytes.length; offset += 8192) {
+          final chunkEnd = offset + 8192 < bytes.length
               ? offset + 8192
-              : _rangePayload.length;
-          request.response.add(_rangePayload.sublist(offset, end));
+              : bytes.length;
+          request.response.add(bytes.sublist(offset, chunkEnd));
           await request.response.flush();
-          if (offset == start && routeNumber == 1) {
+          // Hold only the first ordinary full download, never the 0-0 probe.
+          if (rangeHeader == null && offset == 0) {
             final hold = Completer<void>();
             heldResponses.add(hold);
             await hold.future;
