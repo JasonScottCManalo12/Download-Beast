@@ -20,6 +20,7 @@ class DownloadJob {
   Future<void>? _activeRun;
   bool _cancelRequested = false;
   bool _pauseRequested = false;
+  bool _rangeProbeDisabled = false;
   String? entityTag;
   DownloadStatus status = DownloadStatus.downloading;
   int receivedBytes = 0;
@@ -83,7 +84,7 @@ class DownloadJob {
         ..idleTimeout = const Duration(seconds: 30)
         ..userAgent = 'DownloadBeast/0.1';
       _client = client;
-      if (existingBytes == 0) {
+      if (existingBytes == 0 && !_rangeProbeDisabled) {
         final segmented = await _trySegmentedDownload(client, output);
         if (segmented) return;
       }
@@ -98,6 +99,7 @@ class DownloadJob {
       if (_cancelRequested) throw const _DownloadCancelled();
       if (_pauseRequested) throw const _DownloadPaused();
       var append = false;
+      final responseEtag = response.headers.value(HttpHeaders.etagHeader);
       if (response.statusCode == HttpStatus.partialContent) {
         final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
         final match = contentRange == null ? null : RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(contentRange);
@@ -112,7 +114,6 @@ class DownloadJob {
           await response.drain<void>();
           throw const HttpException('Server returned a mismatched Content-Range.');
         }
-        final responseEtag = response.headers.value(HttpHeaders.etagHeader);
         if (entityTag != null && responseEtag != entityTag) {
           await response.drain<void>();
           throw const HttpException('The remote file changed; resume was rejected.');
@@ -120,13 +121,17 @@ class DownloadJob {
         totalBytes = total;
         append = true;
       } else if (response.statusCode == HttpStatus.ok) {
+        if (existingBytes > 0 && entityTag != null && responseEtag != entityTag) {
+          await response.drain<void>();
+          throw const HttpException('The remote file changed; resume was rejected.');
+        }
         receivedBytes = 0;
         totalBytes = response.contentLength;
       } else {
         await response.drain<void>();
         throw HttpException('Server returned HTTP ${response.statusCode}.');
       }
-      entityTag = response.headers.value(HttpHeaders.etagHeader) ?? entityTag;
+      entityTag = responseEtag ?? entityTag;
       sink = output.openWrite(mode: append ? FileMode.append : FileMode.write);
       await for (final chunk in response) {
         if (_cancelRequested) throw const _DownloadCancelled();
@@ -227,11 +232,14 @@ class DownloadJob {
         await _verifyCompletedDownload(output);
         return true;
       }
-      // A 200 response means Range was ignored; a normal request must consume
-      // the real body. Abort the probe instead of draining a possibly large
-      // stream. Other HTTP errors are already definitive for this attempt and
-      // should not trigger a second request or automatic retry.
+      // A 200 response means Range was ignored. Disable probing for this job
+      // and use the normal single-connection request path. This also prevents
+      // every explicit retry from spending an extra request on the same probe.
+      _rangeProbeDisabled = true;
+      // Other HTTP errors are definitive for this attempt. Do not create a
+      // second request or perform an automatic retry.
       if (response.statusCode >= 400) {
+        await response.drain<void>();
         throw HttpException('Server returned HTTP ${response.statusCode}.');
       }
       return false;
