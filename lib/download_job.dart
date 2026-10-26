@@ -60,6 +60,7 @@ class DownloadJob {
     totalBytes = -1;
     entityTag = null;
     errorMessage = null;
+    _rangeProbeDisabled = true;
     onChanged();
     await start();
   }
@@ -139,9 +140,6 @@ class DownloadJob {
         sink.add(chunk);
         receivedBytes += chunk.length;
         onChanged();
-        // Give pause/cancel callers a chance to run before consuming the next
-        // buffered response chunk. This makes lifecycle controls cooperative
-        // without changing the download data path.
         await Future<void>.delayed(Duration.zero);
       }
       if (_cancelRequested) throw const _DownloadCancelled();
@@ -210,9 +208,7 @@ class DownloadJob {
       final response = await request.close();
       final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
       final tag = response.headers.value(HttpHeaders.etagHeader);
-      if (response.statusCode == HttpStatus.partialContent &&
-          response.contentLength == 1 &&
-          isValidRangeProbe(statusCode: response.statusCode, contentRange: contentRange, bodyLength: 1, entityTag: tag)) {
+      if (response.statusCode == HttpStatus.partialContent && response.contentLength == 1 && isValidRangeProbe(statusCode: response.statusCode, contentRange: contentRange, bodyLength: 1, entityTag: tag)) {
         await response.drain<void>();
         final parsed = parseContentRange(contentRange);
         if (parsed == null || parsed.total < minimumSegmentedDownloadBytes) {
@@ -223,28 +219,15 @@ class DownloadJob {
         if (_pauseRequested) throw const _DownloadPaused();
         totalBytes = parsed.total;
         entityTag = tag;
-        await downloadSegmentedToFile(
-          client: client,
-          uri: url,
-          destination: output,
-          totalBytes: parsed.total,
-          entityTag: tag!,
-          shouldAbort: () => _cancelRequested || _pauseRequested,
-          onProgress: (received, total) {
-            receivedBytes = received;
-            totalBytes = total;
-            onChanged();
-          },
-        );
+        await downloadSegmentedToFile(client: client, uri: url, destination: output, totalBytes: parsed.total, entityTag: tag!, shouldAbort: () => _cancelRequested || _pauseRequested, onProgress: (received, total) {
+          receivedBytes = received;
+          totalBytes = total;
+          onChanged();
+        });
         await _verifyCompletedDownload(output);
         return true;
       }
-      // A 200 response means Range was ignored. Disable probing for this job
-      // and use the normal single-connection request path. This also prevents
-      // every explicit retry from spending an extra request on the same probe.
       _rangeProbeDisabled = true;
-      // Other HTTP errors are definitive for this attempt. Do not create a
-      // second request or perform an automatic retry.
       if (response.statusCode >= 400) {
         await response.drain<void>();
         throw HttpException('Server returned HTTP ${response.statusCode}.');
