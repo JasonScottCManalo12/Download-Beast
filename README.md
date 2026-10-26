@@ -32,7 +32,7 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
 - [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
 - [x] **Milestone 12 — Download integrity and SHA-256 verification:** merged to `main` via [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12); [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
-- [ ] **Milestone 13 — Safe segmented downloads:** implementation and CI validation complete on the feature branch; automated interruption/restart persistence coverage remains before merge. User-reported Windows smoke tests are complete. Scope and acceptance criteria: [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13). Scope and acceptance criteria: [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13).
+- [ ] **Milestone 13 — Safe segmented downloads:** implementation, automated tests, Windows release build, and user-reported Windows smoke tests are complete on the feature branch. Awaiting PR review and successful PR-triggered CI before merge; [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13), [PR #14](https://github.com/JasonScottCManalo12/Download-Beast/pull/14).
   - [x] Plan contiguous byte ranges and parse `Content-Range` and strong ETags
   - [x] Probe server range support and require a valid one-byte `206` response before segmented transfer
   - [x] Download with at most three workers, pin segments to the same strong ETag, validate every response/body length, and assemble in byte order
@@ -40,16 +40,16 @@ Download Beast is an early Flutter desktop download-manager project. The first t
   - [x] Keep single-connection fallback for unsupported/invalid range servers and existing partial/resumable downloads
   - [x] Run the existing SHA-256 integrity verification after assembly
   - [x] Add end-to-end coverage for an 8 MiB+ range-capable download and tests for malformed ranges, ignored ranges, truncated segments, changed ETags, pause/resume, and destination preservation
-  - [x] Pass Flutter analysis and all 63 automated tests, plus Windows release build and artifact upload: [Workflow #179](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40285765815) (the cancellation-cleanup test added afterward is awaiting CI)
+  - [x] Add segmented cancellation cleanup and interruption/restart history-recovery tests; both passed in [Workflow #182](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40293360284)
+  - [x] Pass source analysis, automated tests, Windows release build, and artifact upload in [Workflow #182](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40293360284)
   - [x] Update workflow checkout steps to `actions/checkout@v5`
-  - [ ] Add explicit segmented cancellation/interruption/restart persistence coverage
-  - [x] User smoke-tests the Windows package before merge (user reported all 29 manual checklist items passed)
+  - [x] User reports all 29 Windows smoke-test checklist items passed (manual result is user-reported)
 
 Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCManalo12/Download-Beast/commit/0ce549a556c9353b79578a6b6863e765cf0a9266). Branch CI, Windows package validation, and post-merge CI all passed. [Post-merge Workflow #134](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259720559) completed successfully on `main`.
 
 ## Not implemented yet
 
-- Segmented or multi-connection downloads are not yet merged into `main`; implementation is on `feature/milestone-13-segmented-downloads` and awaits automated interruption/restart persistence coverage
+- Milestone 13 segmented downloads are not yet merged into `main`; implementation is under review in [PR #14](https://github.com/JasonScottCManalo12/Download-Beast/pull/14)
 - Automatic retry scheduling (not implemented; Milestone 10 uses explicit user-triggered attempts)
 - Bandwidth limits
 - Browser extension integration
@@ -59,7 +59,7 @@ SHA-256 verification compares a downloaded file with a user-supplied expected ha
 
 ## Windows build package
 
-The latest previously successful feature-branch package is available from [Workflow #179](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40285765815). The user has now reported all 29 Windows smoke-test checklist items passed. A new cancellation-cleanup test was added after that run and still requires CI validation.
+The latest successful feature-branch package is available from [Workflow #182](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40293360284). Artifact name: `Download-Beast-Windows`; size: 13,035,700 bytes; SHA-256: `0245c27cc246297aed34f9cbcef931035e5aa84cc1caec5658a78494b77ab05f`. It expires on 2026-11-09 at 08:40:30 UTC. The user reports all 29 Windows smoke-test checklist items passed.
 
 Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
 
