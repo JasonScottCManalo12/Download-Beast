@@ -32,22 +32,24 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
 - [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
 - [x] **Milestone 12 — Download integrity and SHA-256 verification:** merged to `main` via [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12); [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
-- [ ] **Milestone 13 — Safe segmented downloads:** planned; design-first scope and acceptance criteria tracked in [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13); work branch `feature/milestone-13-segmented-downloads` created from current `main`.
-  - [x] Add SHA-256 verification utility and tests for matching, mismatch, malformed, and missing expected hashes
-  - [x] Verify downloaded byte count against advertised content length and reject incomplete responses
-  - [x] Add optional expected SHA-256 input with format validation and trusted-source guidance
-  - [x] Persist expected/actual hashes, status, and verification timestamp in SQLite schema version 3 migration
-  - [x] Display integrity status and hash details in active downloads and history
-  - [x] Add tests for verification outcomes, incomplete responses, and integrity metadata persistence
-  - [x] Pass Flutter analysis, 39 automated tests, Windows release build, and artifact upload in CI #130
-  - [x] Inspect Windows package; user confirmed app launch, dashboard, download, unchecked-hash state, persistent history, matching hash `Verified`, and incorrect hash `Hash mismatch`
-  - [x] Verify post-merge CI on `main`: [Workflow #134](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259720559) passed analysis/tests and Windows release build/artifact upload
+- [ ] **Milestone 13 — Safe segmented downloads:** implementation and CI validation complete on the feature branch; interruption/restart coverage and user Windows smoke test remain before merge. Scope and acceptance criteria: [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13).
+  - [x] Plan contiguous byte ranges and parse `Content-Range` and strong ETags
+  - [x] Probe server range support and require a valid one-byte `206` response before segmented transfer
+  - [x] Download with at most three workers, pin segments to the same strong ETag, validate every response/body length, and assemble in byte order
+  - [x] Preserve destination data on segment failures and clean temporary segment files
+  - [x] Keep single-connection fallback for unsupported/invalid range servers and existing partial/resumable downloads
+  - [x] Run the existing SHA-256 integrity verification after assembly
+  - [x] Add end-to-end coverage for an 8 MiB+ range-capable download and tests for malformed ranges, ignored ranges, truncated segments, changed ETags, pause/resume, and destination preservation
+  - [x] Pass Flutter analysis and all 63 automated tests, plus Windows release build and artifact upload: [Workflow #178](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40284321562)
+  - [x] Update workflow checkout steps to `actions/checkout@v5`
+  - [ ] Add explicit segmented cancellation/interruption/restart persistence coverage
+  - [ ] User smoke-tests the Windows package before merge
 
 Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCManalo12/Download-Beast/commit/0ce549a556c9353b79578a6b6863e765cf0a9266). Branch CI, Windows package validation, and post-merge CI all passed. [Post-merge Workflow #134](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259720559) completed successfully on `main`.
 
 ## Not implemented yet
 
-- Segmented or multi-connection downloads
+- Segmented or multi-connection downloads are not yet merged into `main`; implementation is on `feature/milestone-13-segmented-downloads` and awaits interruption/restart coverage plus user Windows smoke testing
 - Automatic retry scheduling (not implemented; Milestone 10 uses explicit user-triggered attempts)
 - Bandwidth limits
 - Browser extension integration
@@ -56,6 +58,8 @@ Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCMana
 SHA-256 verification compares a downloaded file with a user-supplied expected hash; it cannot establish authenticity unless that expected hash comes from a trusted source. This is an initial development build, not yet a production replacement for Internet Download Manager. Test downloads with files you are authorized to retrieve. Servers may block downloads, require authentication, or omit progress metadata.
 
 ## Windows build package
+
+The latest feature-branch package is available from [successful Workflow #178](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40284321562). This confirms CI packaging only; the Milestone 13 package still needs user smoke testing before merge.
 
 Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
 
