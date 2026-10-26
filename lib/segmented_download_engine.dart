@@ -42,7 +42,7 @@ Future<void> downloadSegmentedToFile({
   final parent = await destination.parent.create(recursive: true);
   final workDirectory = await parent.createTemp('.download-beast-segments-');
   final assembled = File(
-    '\${parent.path}\${Platform.pathSeparator}.download-beast-\${DateTime.now().microsecondsSinceEpoch}.tmp',
+    '${parent.path}${Platform.pathSeparator}.download-beast-${DateTime.now().microsecondsSinceEpoch}.tmp',
   );
 
   try {
@@ -54,11 +54,11 @@ Future<void> downloadSegmentedToFile({
         if (index >= ranges.length) return;
         final range = ranges[index];
         final segmentFile = File(
-          '\${workDirectory.path}\${Platform.pathSeparator}segment-$index.part',
+          '${workDirectory.path}${Platform.pathSeparator}segment-$index.part',
         );
         final request = await client.getUrl(uri);
         request.headers
-          ..set(HttpHeaders.rangeHeader, 'bytes=\${range.start}-\${range.end}')
+          ..set(HttpHeaders.rangeHeader, 'bytes=${range.start}-${range.end}')
           ..set(HttpHeaders.ifMatchHeader, entityTag)
           ..set(HttpHeaders.acceptEncodingHeader, 'identity');
 
@@ -78,7 +78,7 @@ Future<void> downloadSegmentedToFile({
           await response.drain<void>();
           throw HttpException(
             'Server returned an invalid response for segment '
-            '\${range.start}-\${range.end}.',
+            '${range.start}-${range.end}.',
             uri: uri,
           );
         }
@@ -108,7 +108,7 @@ Future<void> downloadSegmentedToFile({
         }
         if (written != range.length) {
           throw HttpException(
-            'Segment length mismatch: expected \${range.length}, received $written.',
+            'Segment length mismatch: expected ${range.length}, received $written.',
             uri: uri,
           );
         }
@@ -125,7 +125,7 @@ Future<void> downloadSegmentedToFile({
       for (var index = 0; index < ranges.length; index++) {
         await output.addStream(
           File(
-            '\${workDirectory.path}\${Platform.pathSeparator}segment-$index.part',
+            '${workDirectory.path}${Platform.pathSeparator}segment-$index.part',
           ).openRead(),
         );
       }
