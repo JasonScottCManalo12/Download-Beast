@@ -193,7 +193,8 @@ void main() {
   test('uses segmented download for a large strong-ETag range-capable file', () async {
     final destination = '${tempDirectory.path}/segmented-payload.bin';
     final progressValues = <int>[];
-    final job = DownloadJob(
+    late final DownloadJob job;
+    job = DownloadJob(
       url: url('/segmented-payload'),
       destinationPath: destination,
       onChanged: () => progressValues.add(job.receivedBytes),
