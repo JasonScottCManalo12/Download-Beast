@@ -138,10 +138,36 @@ Future<void> downloadSegmentedToFile({
       throw const HttpException('Assembled file length does not match the representation size.');
     }
 
-    // Replace the destination only after all segments validate and assembly
-    // has the expected total length.
-    if (await destination.exists()) await destination.delete();
-    await assembled.rename(destination.path);
+    // Preserve an existing destination until the assembled file has been
+    // promoted successfully. Rename within the same parent directory so the
+    // backup and destination remain on the same filesystem.
+    File? backup;
+    if (await destination.exists()) {
+      backup = File(
+        '${destination.path}.download-beast-backup-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      await destination.rename(backup.path);
+    }
+
+    try {
+      await assembled.rename(destination.path);
+    } on Object {
+      // Best-effort rollback if promotion fails. If rollback also fails, keep
+      // the backup file rather than deleting the user's previous download.
+      if (backup != null && await backup.exists() && !await destination.exists()) {
+        try {
+          await backup.rename(destination.path);
+          backup = null;
+        } on Object {
+          // Leave the backup at its recovery path for manual restoration.
+        }
+      }
+      rethrow;
+    }
+
+    if (backup != null && await backup.exists()) {
+      await backup.delete();
+    }
   } finally {
     if (await assembled.exists()) await assembled.delete();
     if (await workDirectory.exists()) {
