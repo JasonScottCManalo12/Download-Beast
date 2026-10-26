@@ -9,12 +9,14 @@ void main() {
   final payload = List<int>.generate(37, (index) => (index * 17) % 256);
   var malformedRange = false;
   var changedTag = false;
+  var ignoreRange = false;
   var activeRequests = 0;
   var maxActiveRequests = 0;
 
   setUp(() async {
     malformedRange = false;
     changedTag = false;
+    ignoreRange = false;
     activeRequests = 0;
     maxActiveRequests = 0;
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_segments_');
@@ -34,6 +36,14 @@ void main() {
         }
         final start = int.parse(match.group(1)!);
         final end = int.parse(match.group(2)!);
+        if (ignoreRange) {
+          request.response.statusCode = HttpStatus.ok;
+          request.response.headers.set(HttpHeaders.etagHeader, '"stable-v1"');
+          request.response.contentLength = payload.length;
+          request.response.add(payload);
+          await request.response.close();
+          return;
+        }
         final etag = changedTag ? '"changed-v2"' : '"stable-v1"';
         request.response.headers.set(HttpHeaders.etagHeader, etag);
         request.response.statusCode = HttpStatus.partialContent;
@@ -105,6 +115,28 @@ void main() {
     );
 
     expect(await destination.readAsString(), 'keep me');
+  });
+
+  test('rejects a server that ignores Range and preserves existing destination', () async {
+    ignoreRange = true;
+    final destination = File('${tempDirectory.path}/existing-on-200.bin');
+    await destination.writeAsString('keep this original');
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+
+    await expectLater(
+      downloadSegmentedToFile(
+        client: client,
+        uri: buildUrl(),
+        destination: destination,
+        totalBytes: payload.length,
+        entityTag: '"stable-v1"',
+        segmentSizeBytes: 5,
+      ),
+      throwsA(isA<HttpException>()),
+    );
+
+    expect(await destination.readAsString(), 'keep this original');
   });
 
   test('rejects a changed ETag before assembling output', () async {
