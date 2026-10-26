@@ -7,6 +7,8 @@ import 'package:download_beast/download_job.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final _rangePayload = List<int>.generate(256 * 1024, (index) => index % 251);
+final _segmentedPayload =
+    List<int>.generate(8 * 1024 * 1024 + 123, (index) => index % 239);
 
 void main() {
   late HttpServer server;
@@ -14,7 +16,6 @@ void main() {
   late Completer<void> slowResponseFlushed;
   final heldResponses = <Completer<void>>[];
   final rangeRequestHeaders = <String>[];
-  var rangeRouteCount = 0;
   var flakyRouteCount = 0;
   var missingRouteCount = 0;
 
@@ -22,11 +23,41 @@ void main() {
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_test_');
     slowResponseFlushed = Completer<void>();
     rangeRequestHeaders.clear();
-    rangeRouteCount = 0;
     flakyRouteCount = 0;
     missingRouteCount = 0;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      if (request.uri.path == '/segmented-payload') {
+        final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+        final match = rangeHeader == null
+            ? null
+            : RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
+        if (match == null) {
+          request.response.statusCode = HttpStatus.badRequest;
+          await request.response.close();
+          return;
+        }
+        final start = int.parse(match.group(1)!);
+        final end = int.parse(match.group(2)!);
+        if (start < 0 || end < start || end >= _segmentedPayload.length) {
+          request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+          await request.response.close();
+          return;
+        }
+        request.response.statusCode = HttpStatus.partialContent;
+        request.response.headers
+          ..set(HttpHeaders.acceptRangesHeader, 'bytes')
+          ..set(HttpHeaders.etagHeader, '"segmented-v1"')
+          ..set(
+            HttpHeaders.contentRangeHeader,
+            'bytes $start-$end/${_segmentedPayload.length}',
+          )
+          ..contentLength = end - start + 1;
+        request.response.add(_segmentedPayload.sublist(start, end + 1));
+        await request.response.close();
+        return;
+      }
+
       if (request.uri.path == '/range-payload' ||
           request.uri.path == '/ignore-range' ||
           request.uri.path == '/bad-range' ||
@@ -35,32 +66,56 @@ void main() {
         rangeRequestHeaders.add(rangeHeader ?? '');
         final honorRange = request.uri.path != '/ignore-range';
         var start = 0;
+        var endInclusive = _rangePayload.length - 1;
+        var isRangeRequest = false;
         if (honorRange && rangeHeader != null) {
-          final match = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
-          if (match != null) start = int.parse(match.group(1)!);
+          final closedRange = RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
+          final openRange = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
+          if (closedRange != null) {
+            start = int.parse(closedRange.group(1)!);
+            endInclusive = int.parse(closedRange.group(2)!);
+            isRangeRequest = true;
+          } else if (openRange != null) {
+            start = int.parse(openRange.group(1)!);
+            isRangeRequest = true;
+          }
         }
-        final routeNumber = ++rangeRouteCount;
+        if (start < 0 ||
+            endInclusive < start ||
+            start >= _rangePayload.length ||
+            endInclusive >= _rangePayload.length) {
+          request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+          await request.response.close();
+          return;
+        }
         request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
-        final responseEtag = request.uri.path == '/changed-etag' && routeNumber > 1
-            ? '"fixture-v2"'
-            : '"fixture-v1"';
+        final isResumeRange = rangeHeader != null &&
+            RegExp(r'^bytes=[1-9]\d*-$').hasMatch(rangeHeader);
+        final responseEtag =
+            request.uri.path == '/changed-etag' && isResumeRange
+                ? '"fixture-v2"'
+                : '"fixture-v1"';
         request.response.headers.set(HttpHeaders.etagHeader, responseEtag);
-        if (start > 0) {
+        if (isRangeRequest) {
           request.response.statusCode = HttpStatus.partialContent;
+          final reportedStart =
+              request.uri.path == '/bad-range' ? start + 1 : start;
           request.response.headers.set(
             HttpHeaders.contentRangeHeader,
-            'bytes ${request.uri.path == '/bad-range' ? start + 1 : start}-${_rangePayload.length - 1}/${_rangePayload.length}',
+            'bytes $reportedStart-$endInclusive/${_rangePayload.length}',
           );
         }
-        request.response.contentLength = _rangePayload.length - start;
+        final bytes = _rangePayload.sublist(start, endInclusive + 1);
+        request.response.contentLength = bytes.length;
         request.response.bufferOutput = false;
-        for (var offset = start; offset < _rangePayload.length; offset += 8192) {
-          final end = (offset + 8192 < _rangePayload.length)
+        for (var offset = 0; offset < bytes.length; offset += 8192) {
+          final chunkEnd = offset + 8192 < bytes.length
               ? offset + 8192
-              : _rangePayload.length;
-          request.response.add(_rangePayload.sublist(offset, end));
+              : bytes.length;
+          request.response.add(bytes.sublist(offset, chunkEnd));
           await request.response.flush();
-          if (offset == start && routeNumber == 1) {
+          // Hold only the first ordinary full download, never the 0-0 probe.
+          if (rangeHeader == null && offset == 0) {
             final hold = Completer<void>();
             heldResponses.add(hold);
             await hold.future;
@@ -156,6 +211,26 @@ void main() {
 
   Uri url(String path) =>
       Uri.parse('http://${server.address.address}:${server.port}$path');
+
+  test('uses segmented download for a large strong-ETag range-capable file', () async {
+    final destination = '${tempDirectory.path}/segmented-payload.bin';
+    final progressValues = <int>[];
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/segmented-payload'),
+      destinationPath: destination,
+      onChanged: () => progressValues.add(job.receivedBytes),
+    );
+
+    await job.start().timeout(const Duration(seconds: 30));
+
+    expect(job.status, DownloadStatus.completed);
+    expect(job.totalBytes, _segmentedPayload.length);
+    expect(job.receivedBytes, _segmentedPayload.length);
+    expect(job.progress, 1.0);
+    expect(progressValues, isNotEmpty);
+    expect(await File(destination).readAsBytes(), _segmentedPayload);
+  });
 
   test('pause preserves partial bytes and resume completes with HTTP Range', () async {
     final destination = '${tempDirectory.path}/range-payload.bin';
@@ -273,6 +348,7 @@ void main() {
     expect(job.errorMessage, contains('remote file changed'));
     expect(await File(destination).exists(), isFalse);
   });
+
   test('downloads a file and reports completed progress', () async {
     final destination = '${tempDirectory.path}/payload.txt';
     var changeCount = 0;
@@ -446,7 +522,6 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
-
   test('reports verified SHA-256 when expected hash matches downloaded bytes', () async {
     const payload = 'Download Beast test payload';
     final expected = sha256.convert(utf8.encode(payload)).toString();
@@ -500,7 +575,6 @@ void main() {
     expect(job.actualSha256, isNull);
   });
 
-
   test('rejects an incomplete response whose advertised length is not received', () async {
     final destination = '${tempDirectory.path}/incomplete.txt';
     final job = DownloadJob(
@@ -514,5 +588,4 @@ void main() {
     expect(job.status, DownloadStatus.failed);
     expect(await File(destination).exists(), isFalse);
   });
-
 }
