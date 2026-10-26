@@ -61,7 +61,7 @@ void main() {
     }
   });
 
-  Uri url() => Uri.parse(
+  Uri buildUrl() => Uri.parse(
         'http://${InternetAddress.loopbackIPv4.address}:${server.port}/payload',
       );
 
@@ -72,7 +72,7 @@ void main() {
 
     await downloadSegmentedToFile(
       client: client,
-      uri: url(),
+      uri: buildUrl(),
       destination: destination,
       totalBytes: payload.length,
       entityTag: '"stable-v1"',
