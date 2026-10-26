@@ -90,7 +90,7 @@ Future<void> downloadSegmentedToFile({
           await for (final chunk in response) {
             written += chunk.length;
             if (written > range.length) {
-              throw HttpException('Segment body exceeded its declared range.');
+              throw const HttpException('Segment body exceeded its declared range.');
             }
             sink.add(chunk);
           }
@@ -135,7 +135,7 @@ Future<void> downloadSegmentedToFile({
     }
 
     if (await assembled.length() != totalBytes) {
-      throw HttpException('Assembled file length does not match the representation size.');
+      throw const HttpException('Assembled file length does not match the representation size.');
     }
 
     // Replace the destination only after all segments validate and assembly
