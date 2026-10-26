@@ -40,9 +40,9 @@ Download Beast is an early Flutter desktop download-manager project. The first t
   - [x] Add tests for verification outcomes, incomplete responses, and integrity metadata persistence
   - [x] Pass Flutter analysis, 39 automated tests, Windows release build, and artifact upload in CI #130
   - [x] Inspect Windows package; user confirmed app launch, dashboard, download, unchecked-hash state, persistent history, matching hash `Verified`, and incorrect hash `Hash mismatch`
-  - [ ] Verify post-merge CI on `main`
+  - [x] Verify post-merge CI on `main`: [Workflow #134](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259720559) passed analysis/tests and Windows release build/artifact upload
 
-Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCManalo12/Download-Beast/commit/0ce549a556c9353b79578a6b6863e765cf0a9266). Branch CI and Windows package validation passed; post-merge CI is running: [Workflow #133](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259651239).
+Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCManalo12/Download-Beast/commit/0ce549a556c9353b79578a6b6863e765cf0a9266). Branch CI, Windows package validation, and post-merge CI all passed. [Post-merge Workflow #134](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259720559) completed successfully on `main`.
 
 ## Not implemented yet
 
