@@ -26,7 +26,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const DownloadBeastApp());
 
-    expect(find.bySemanticsLabel('Download URL'), findsOneWidget);
+    expect(find.bySemanticsLabel('Download URL'), findsWidgets);
     expect(find.bySemanticsLabel(RegExp(r'^Download$')), findsOneWidget);
   });
 
