@@ -56,7 +56,11 @@ void main() {
   });
 
   Uri url(String path) => Uri.parse(
-        'http://\${InternetAddress.loopbackIPv4.address}:\${server.port}$path',
+        'http://' +
+            InternetAddress.loopbackIPv4.address +
+            ':' +
+            server.port.toString() +
+            path,
       );
 
   test('accepts an exact one-byte 206 response with a strong ETag', () async {
