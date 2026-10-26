@@ -143,25 +143,49 @@ class DownloadJob {
       if (totalBytes >= 0 && receivedBytes != totalBytes) throw HttpException('Downloaded file length mismatch: expected $totalBytes bytes, received $receivedBytes.');
       await _verifyCompletedDownload(output);
     } on _DownloadPaused {
-      await _closeSinkQuietly(sink); sink = null;
+      await _closeSinkQuietly(sink);
+      sink = null;
       if (await output.exists()) receivedBytes = await output.length();
       status = DownloadStatus.paused;
     } on _DownloadCancelled {
       status = DownloadStatus.cancelled;
-      await _closeSinkQuietly(sink); sink = null;
-      await _deletePartialFile(output); receivedBytes = 0;
+      await _closeSinkQuietly(sink);
+      sink = null;
+      await _deletePartialFile(output);
+      receivedBytes = 0;
     } on SegmentedDownloadAborted {
-      await _closeSinkQuietly(sink); sink = null;
-      if (_cancelRequested) { status = DownloadStatus.cancelled; receivedBytes = 0; }
-      else if (_pauseRequested) { status = DownloadStatus.paused; }
-      else { status = DownloadStatus.failed; errorMessage = 'Segmented download was aborted.'; }
+      await _closeSinkQuietly(sink);
+      sink = null;
+      if (_cancelRequested) {
+        status = DownloadStatus.cancelled;
+        receivedBytes = 0;
+      } else if (_pauseRequested) {
+        status = DownloadStatus.paused;
+      } else {
+        status = DownloadStatus.failed;
+        errorMessage = 'Segmented download was aborted.';
+      }
     } catch (error) {
-      await _closeSinkQuietly(sink); sink = null;
-      if (_cancelRequested) { status = DownloadStatus.cancelled; await _deletePartialFile(output); receivedBytes = 0; }
-      else if (_pauseRequested) { if (await output.exists()) receivedBytes = await output.length(); status = DownloadStatus.paused; }
-      else { status = DownloadStatus.failed; errorMessage = _describeError(error); await _deletePartialFile(output); receivedBytes = 0; }
+      await _closeSinkQuietly(sink);
+      sink = null;
+      if (_cancelRequested) {
+        status = DownloadStatus.cancelled;
+        await _deletePartialFile(output);
+        receivedBytes = 0;
+      } else if (_pauseRequested) {
+        if (await output.exists()) receivedBytes = await output.length();
+        status = DownloadStatus.paused;
+      } else {
+        status = DownloadStatus.failed;
+        errorMessage = _describeError(error);
+        await _deletePartialFile(output);
+        receivedBytes = 0;
+      }
     } finally {
-      _client?.close(force: true); _client = null; _activeRun = null; onChanged();
+      _client?.close(force: true);
+      _client = null;
+      _activeRun = null;
+      onChanged();
     }
   }
   Future<bool> _trySegmentedDownload(HttpClient client, File output) async {
@@ -194,7 +218,11 @@ class DownloadJob {
           totalBytes: parsed.total,
           entityTag: tag!,
           shouldAbort: () => _cancelRequested || _pauseRequested,
-          onProgress: (received, total) { receivedBytes = received; totalBytes = total; onChanged(); },
+          onProgress: (received, total) {
+            receivedBytes = received;
+            totalBytes = total;
+            onChanged();
+          },
         );
         await _verifyCompletedDownload(output);
         return true;
@@ -216,8 +244,11 @@ class DownloadJob {
     integrityStatus = verification.status.name;
     actualSha256 = verification.actualSha256;
     integrityCheckedAt = DateTime.now();
-    if (verification.message != null && verification.status != IntegrityStatus.notChecked) errorMessage = verification.message;
-    else errorMessage = null;
+    if (verification.message != null && verification.status != IntegrityStatus.notChecked) {
+      errorMessage = verification.message;
+    } else {
+      errorMessage = null;
+    }
     status = DownloadStatus.completed;
   }
   String _describeError(Object error) {
@@ -230,11 +261,27 @@ class DownloadJob {
   }
   Future<void> _closeSinkQuietly(IOSink? sink) async {
     if (sink == null) return;
-    try { await sink.close(); } on FileSystemException { } on StateError { }
+    try {
+      await sink.close();
+    } on FileSystemException {
+      // The sink may already have been closed by cancellation or connection teardown.
+    } on StateError {
+      // The sink may already have been closed by cancellation or connection teardown.
+    }
   }
   Future<void> _deletePartialFile(File file) async {
-    try { if (await file.exists()) await file.delete(); } on FileSystemException { }
+    try {
+      if (await file.exists()) await file.delete();
+    } on FileSystemException {
+      // Cleanup is best-effort; preserve the primary download error.
+    }
   }
 }
-class _DownloadCancelled implements Exception { const _DownloadCancelled(); }
-class _DownloadPaused implements Exception { const _DownloadPaused(); }
+
+class _DownloadCancelled implements Exception {
+  const _DownloadCancelled();
+}
+
+class _DownloadPaused implements Exception {
+  const _DownloadPaused();
+}
