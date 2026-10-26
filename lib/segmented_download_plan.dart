@@ -101,3 +101,23 @@ bool isStrongEntityTag(String? value) {
   final tag = value.trim();
   return RegExp(r'^"[^"\x00-\x20\x7F]*"$').hasMatch(tag);
 }
+
+/// Validates the headers and body length required for a one-byte range probe.
+///
+/// This is a pure validation helper; the HTTP layer must still consume the
+/// response body, close the response, and decide whether to fall back.
+bool isValidRangeProbe({
+  required int statusCode,
+  required String? contentRange,
+  required int bodyLength,
+  required String? entityTag,
+}) {
+  final parsed = parseContentRange(contentRange);
+  return statusCode == 206 &&
+      parsed != null &&
+      parsed.start == 0 &&
+      parsed.end == 0 &&
+      parsed.total > 0 &&
+      bodyLength == 1 &&
+      isStrongEntityTag(entityTag);
+}
