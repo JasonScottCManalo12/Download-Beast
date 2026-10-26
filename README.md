@@ -31,29 +31,30 @@ Download Beast is an early Flutter desktop download-manager project. The first t
 - [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
 - [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
 - [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
-- [ ] **Milestone 12 — Download integrity and SHA-256 verification:** implementation and tests in progress on `feature/milestone-12-integrity-verification`; [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
+- [ ] **Milestone 12 — Download integrity and SHA-256 verification:** implementation and automated tests are green on `feature/milestone-12-integrity-verification`; Windows smoke testing is partially complete; [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11), [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12)
   - [x] Add SHA-256 verification utility and tests for matching, mismatch, malformed, and missing expected hashes
   - [x] Verify downloaded byte count against advertised content length and reject incomplete responses
   - [x] Add optional expected SHA-256 input with format validation and trusted-source guidance
   - [x] Persist expected/actual hash, status, and verification timestamp in SQLite schema version 3 migration
   - [x] Display integrity status and hash details in active download cards and history
   - [x] Add tests for verification outcomes, incomplete responses, and integrity metadata persistence
-  - [ ] Verify analysis and tests in CI
-  - [ ] Inspect Windows package and complete user-confirmed smoke tests
+  - [x] Verify Flutter analysis, 39 automated tests, Windows release build, and artifact upload in CI #130
+  - [x] Inspect Windows package contents; user confirmed launch, dashboard, download, unchecked-hash state, and persistent history
+  - [ ] User-confirmed smoke tests for matching and mismatching expected SHA-256
+  - [ ] Merge PR #12 after hash-verification smoke tests
   - [ ] Verify post-merge CI
 
-Latest verified CI on `main`: [Workflow #92](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40141268451), passed Flutter analysis, automated tests, Windows release build, and package upload after the Milestone 10 roadmap update. Milestone 11 work is currently on a feature branch and has not been merged.
+Latest Milestone 12 validation: [Workflow #130](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40254266063) passed analysis, 39 automated tests, Windows release build, and artifact upload on the Milestone 12 branch. PR #12 remains open pending the two remaining user smoke tests for matching and mismatching expected hashes.
 
 ## Not implemented yet
 
 - Segmented or multi-connection downloads
 - Automatic retry scheduling (not implemented; Milestone 10 uses explicit user-triggered attempts)
 - Bandwidth limits
-- Checksum verification
 - Browser extension integration
 - Signed installer
 
-This is an initial development build, not yet a production replacement for Internet Download Manager. Test downloads with files you are authorized to retrieve. Servers may block downloads, require authentication, or omit progress metadata.
+SHA-256 verification compares a downloaded file with a user-supplied expected hash; it cannot establish authenticity unless that expected hash comes from a trusted source. This is an initial development build, not yet a production replacement for Internet Download Manager. Test downloads with files you are authorized to retrieve. Servers may block downloads, require authentication, or omit progress metadata.
 
 ## Windows build package
 
