@@ -71,8 +71,8 @@ void main() {
         var endInclusive = _rangePayload.length - 1;
         var isRangeRequest = false;
         if (honorRange && rangeHeader != null) {
-          final closedRange = RegExp(r'^bytes=(\\d+)-(\\d+)$').firstMatch(rangeHeader);
-          final openRange = RegExp(r'^bytes=(\\d+)-$').firstMatch(rangeHeader);
+          final closedRange = RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
+          final openRange = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
           if (closedRange != null) {
             start = int.parse(closedRange.group(1)!);
             endInclusive = int.parse(closedRange.group(2)!);
@@ -92,7 +92,7 @@ void main() {
         }
         request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
         final isResumeRange = rangeHeader != null &&
-            RegExp(r'^bytes=[1-9]\\d*-$').hasMatch(rangeHeader);
+            RegExp(r'^bytes=[1-9]\d*-$').hasMatch(rangeHeader);
         final responseEtag =
             request.uri.path == '/changed-etag' && isResumeRange
                 ? '"fixture-v2"'
