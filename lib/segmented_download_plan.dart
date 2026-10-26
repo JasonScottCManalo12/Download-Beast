@@ -74,7 +74,7 @@ class ParsedContentRange {
   int get length => end - start + 1;
 }
 
-/// Parses a complete Content-Range value such as `bytes 0-99/1000`.
+/// Parses a complete Content-Range value such as \`bytes 0-99/1000\`.
 ///
 /// Returns null for unknown totals, malformed values, unsatisfiable ranges,
 /// reversed ranges, or ranges that extend beyond the representation.
@@ -82,26 +82,6 @@ ParsedContentRange? parseContentRange(String? value) {
   if (value == null) return null;
   final match =
       RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(value.trim());
-  if (match == null) return null;
-
-  final start = int.tryParse(match.group(1)!);
-  final end = int.tryParse(match.group(2)!);
-  final total = int.tryParse(match.group(3)!);
-  if (start == null || end == null || total == null) return null;
-  if (total <= 0 || start < 0 || end < start || end >= total) return null;
-
-  return ParsedContentRange(start: start, end: end, total: total);
-}
-
-/// Returns true only for a syntactically strong, quoted HTTP entity-tag.
-///
-/// Weak ETags (for example, W/"version-1") cannot safely pin parallel ranges.
-bool isStrongEntityTag(String? value) {
-  if (value == null) return false;
-  final tag = value.trim();
-  return RegExp(r'^"[^"\x00-\x20\x7F]*"$').hasMatch(tag);
-}
-).firstMatch(value.trim());
   if (match == null) return null;
 
   final start = int.tryParse(match.group(1)!);
