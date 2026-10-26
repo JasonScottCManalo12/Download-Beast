@@ -16,7 +16,6 @@ void main() {
   late Completer<void> slowResponseFlushed;
   final heldResponses = <Completer<void>>[];
   final rangeRequestHeaders = <String>[];
-  var rangeRouteCount = 0;
   var flakyRouteCount = 0;
   var missingRouteCount = 0;
 
@@ -24,7 +23,6 @@ void main() {
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_test_');
     slowResponseFlushed = Completer<void>();
     rangeRequestHeaders.clear();
-    rangeRouteCount = 0;
     flakyRouteCount = 0;
     missingRouteCount = 0;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
