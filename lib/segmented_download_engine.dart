@@ -54,7 +54,7 @@ Future<void> downloadSegmentedToFile({
 
   try {
     var nextRangeIndex = 0;
-    var completedBytes = 0;
+    var downloadedBytes = 0;
 
     void checkAborted() {
       if (shouldAbort?.call() ?? false) {
@@ -109,7 +109,8 @@ Future<void> downloadSegmentedToFile({
               throw const HttpException('Segment body exceeded its declared range.');
             }
             sink.add(chunk);
-            onProgress?.call(completedBytes + written, totalBytes);
+            downloadedBytes += chunk.length;
+            onProgress?.call(downloadedBytes, totalBytes);
           }
           await sink.flush();
           await sink.close();
@@ -129,8 +130,6 @@ Future<void> downloadSegmentedToFile({
             uri: uri,
           );
         }
-        completedBytes += written;
-        onProgress?.call(completedBytes, totalBytes);
       }
     }
 
