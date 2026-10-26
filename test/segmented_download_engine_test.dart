@@ -10,6 +10,7 @@ void main() {
   var malformedRange = false;
   var changedTag = false;
   var ignoreRange = false;
+  var truncateFirstSegment = false;
   var activeRequests = 0;
   var maxActiveRequests = 0;
 
@@ -17,6 +18,7 @@ void main() {
     malformedRange = false;
     changedTag = false;
     ignoreRange = false;
+    truncateFirstSegment = false;
     activeRequests = 0;
     maxActiveRequests = 0;
     tempDirectory = await Directory.systemTemp.createTemp('download_beast_segments_');
@@ -53,8 +55,13 @@ void main() {
               ? 'bytes ${start + 1}-$end/${payload.length}'
               : 'bytes $start-$end/${payload.length}',
         );
-        final bytes = payload.sublist(start, end + 1);
+        var bytes = payload.sublist(start, end + 1);
         request.response.contentLength = bytes.length;
+        if (truncateFirstSegment && start == 0 && bytes.isNotEmpty) {
+          // Deliberately advertise the full range, then end the body early.
+          request.response.contentLength = bytes.length;
+          bytes = bytes.sublist(0, bytes.length - 1);
+        }
         await Future<void>.delayed(const Duration(milliseconds: 5));
         request.response.add(bytes);
         await request.response.close();
@@ -137,6 +144,29 @@ void main() {
     );
 
     expect(await destination.readAsString(), 'keep this original');
+  });
+
+  test('rejects a truncated segment and preserves existing destination', () async {
+    truncateFirstSegment = true;
+    final destination = File('${tempDirectory.path}/existing-on-truncation.bin');
+    await destination.writeAsString('keep original bytes');
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+
+    await expectLater(
+      downloadSegmentedToFile(
+        client: client,
+        uri: buildUrl(),
+        destination: destination,
+        totalBytes: payload.length,
+        entityTag: '"stable-v1"',
+        segmentSizeBytes: 5,
+        maxConcurrentSegments: 1,
+      ),
+      throwsA(anything),
+    );
+
+    expect(await destination.readAsString(), 'keep original bytes');
   });
 
   test('rejects a changed ETag before assembling output', () async {
