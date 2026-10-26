@@ -127,3 +127,60 @@ void main() {
     });
   });
 }
+
+  group('isValidRangeProbe', () {
+    test('accepts only a valid one-byte partial response with a strong ETag', () {
+      expect(
+        isValidRangeProbe(
+          statusCode: 206,
+          contentRange: 'bytes 0-0/100',
+          bodyLength: 1,
+          entityTag: '"stable-v1"',
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects HTTP 200 even if it supplies a strong ETag', () {
+      expect(
+        isValidRangeProbe(
+          statusCode: 200,
+          contentRange: 'bytes 0-0/100',
+          bodyLength: 1,
+          entityTag: '"stable-v1"',
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects wrong range, total, body length, or weak ETag', () {
+      final invalidProbes = <({
+        int statusCode,
+        String? contentRange,
+        int bodyLength,
+        String? entityTag,
+      })>[
+        (statusCode: 206, contentRange: 'bytes 1-1/100', bodyLength: 1, entityTag: '"v1"'),
+        (statusCode: 206, contentRange: 'bytes 0-1/100', bodyLength: 1, entityTag: '"v1"'),
+        (statusCode: 206, contentRange: 'bytes 0-0/*', bodyLength: 1, entityTag: '"v1"'),
+        (statusCode: 206, contentRange: 'bytes 0-0/100', bodyLength: 0, entityTag: '"v1"'),
+        (statusCode: 206, contentRange: 'bytes 0-0/100', bodyLength: 2, entityTag: '"v1"'),
+        (statusCode: 206, contentRange: 'bytes 0-0/100', bodyLength: 1, entityTag: 'W/"v1"'),
+        (statusCode: 206, contentRange: 'invalid', bodyLength: 1, entityTag: '"v1"'),
+      ];
+
+      for (final probe in invalidProbes) {
+        expect(
+          isValidRangeProbe(
+            statusCode: probe.statusCode,
+            contentRange: probe.contentRange,
+            bodyLength: probe.bodyLength,
+            entityTag: probe.entityTag,
+          ),
+          isFalse,
+          reason: 'Should reject $probe',
+        );
+      }
+    });
+  });
+}
