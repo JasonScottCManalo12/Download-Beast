@@ -56,12 +56,12 @@ void main() {
               : 'bytes $start-$end/${payload.length}',
         );
         var bytes = payload.sublist(start, end + 1);
-        request.response.contentLength = bytes.length;
         if (truncateFirstSegment && start == 0 && bytes.isNotEmpty) {
-          // Deliberately advertise the full range, then end the body early.
-          request.response.contentLength = bytes.length;
+          // Return a shorter, otherwise well-formed HTTP body for the requested
+          // range so the downloader's received-byte check detects truncation.
           bytes = bytes.sublist(0, bytes.length - 1);
         }
+        request.response.contentLength = bytes.length;
         await Future<void>.delayed(const Duration(milliseconds: 5));
         request.response.add(bytes);
         await request.response.close();
