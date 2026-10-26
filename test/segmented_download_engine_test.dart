@@ -95,7 +95,7 @@ void main() {
     await expectLater(
       downloadSegmentedToFile(
         client: client,
-        uri: url,
+        uri: buildUrl(),
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
@@ -116,7 +116,7 @@ void main() {
     await expectLater(
       downloadSegmentedToFile(
         client: client,
-        uri: url,
+        uri: buildUrl(),
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
