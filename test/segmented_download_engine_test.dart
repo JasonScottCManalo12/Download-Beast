@@ -21,11 +21,14 @@ void main() {
     truncateFirstSegment = false;
     activeRequests = 0;
     maxActiveRequests = 0;
-    tempDirectory = await Directory.systemTemp.createTemp('download_beast_segments_');
+    tempDirectory =
+        await Directory.systemTemp.createTemp('download_beast_segments_');
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       activeRequests++;
-      if (activeRequests > maxActiveRequests) maxActiveRequests = activeRequests;
+      if (activeRequests > maxActiveRequests) {
+        maxActiveRequests = activeRequests;
+      }
       try {
         final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
         final match = rangeHeader == null
@@ -82,7 +85,8 @@ void main() {
         'http://${InternetAddress.loopbackIPv4.address}:${server.port}/payload',
       );
 
-  test('downloads, validates, and assembles ranges in exact byte order', () async {
+  test('downloads, validates, and assembles ranges in exact byte order',
+      () async {
     final destination = File('${tempDirectory.path}/payload.bin');
     final client = HttpClient();
     addTearDown(() => client.close(force: true));
@@ -93,7 +97,6 @@ void main() {
       destination: destination,
       totalBytes: payload.length,
       entityTag: '"stable-v1"',
-      segmentSizeBytes: 5,
       maxConcurrentSegments: 3,
     );
 
@@ -102,7 +105,8 @@ void main() {
     expect(maxActiveRequests, greaterThan(1));
   });
 
-  test('rejects a mismatched Content-Range and preserves existing destination', () async {
+  test('rejects a mismatched Content-Range and preserves existing destination',
+      () async {
     malformedRange = true;
     final destination = File('${tempDirectory.path}/existing.bin');
     await destination.writeAsString('keep me');
@@ -116,7 +120,6 @@ void main() {
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
-        segmentSizeBytes: 5,
       ),
       throwsA(isA<HttpException>()),
     );
@@ -124,7 +127,8 @@ void main() {
     expect(await destination.readAsString(), 'keep me');
   });
 
-  test('rejects a server that ignores Range and preserves existing destination', () async {
+  test('rejects a server that ignores Range and preserves existing destination',
+      () async {
     ignoreRange = true;
     final destination = File('${tempDirectory.path}/existing-on-200.bin');
     await destination.writeAsString('keep this original');
@@ -138,7 +142,6 @@ void main() {
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
-        segmentSizeBytes: 5,
       ),
       throwsA(isA<HttpException>()),
     );
@@ -146,9 +149,11 @@ void main() {
     expect(await destination.readAsString(), 'keep this original');
   });
 
-  test('rejects a truncated segment and preserves existing destination', () async {
+  test('rejects a truncated segment and preserves existing destination',
+      () async {
     truncateFirstSegment = true;
-    final destination = File('${tempDirectory.path}/existing-on-truncation.bin');
+    final destination =
+        File('${tempDirectory.path}/existing-on-truncation.bin');
     await destination.writeAsString('keep original bytes');
     final client = HttpClient();
     addTearDown(() => client.close(force: true));
@@ -160,7 +165,6 @@ void main() {
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
-        segmentSizeBytes: 5,
         maxConcurrentSegments: 1,
       ),
       throwsA(anything),
@@ -182,7 +186,6 @@ void main() {
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
-        segmentSizeBytes: 5,
       ),
       throwsA(isA<HttpException>()),
     );
@@ -190,7 +193,8 @@ void main() {
     expect(await destination.exists(), isFalse);
   });
 
-  test('cancels a segmented transfer and cleans temporary segment state', () async {
+  test('cancels a segmented transfer and cleans temporary segment state',
+      () async {
     final destination = File('${tempDirectory.path}/cancelled.bin');
     final client = HttpClient();
     addTearDown(() => client.close(force: true));
@@ -203,7 +207,6 @@ void main() {
         destination: destination,
         totalBytes: payload.length,
         entityTag: '"stable-v1"',
-        segmentSizeBytes: 5,
         maxConcurrentSegments: 1,
         shouldAbort: () => ++abortChecks >= 3,
       ),
@@ -216,5 +219,4 @@ void main() {
         .where((entry) => entry.path.contains('.download-beast-segments-'));
     expect(leftovers, isEmpty);
   });
-
 }

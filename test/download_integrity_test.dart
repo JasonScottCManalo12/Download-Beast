@@ -10,7 +10,8 @@ void main() {
   late File file;
 
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('download_integrity_test_');
+    directory =
+        await Directory.systemTemp.createTemp('download_integrity_test_');
     file = File('${directory.path}/payload.bin');
     await file.writeAsString('Download Beast integrity fixture');
   });
@@ -27,14 +28,17 @@ void main() {
   });
 
   test('reports verified when the supplied expected hash matches', () async {
-    final expected = sha256.convert(utf8.encode('Download Beast integrity fixture')).toString();
+    final expected = sha256
+        .convert(utf8.encode('Download Beast integrity fixture'))
+        .toString();
     final result = await verifySha256(file, expectedSha256: expected);
     expect(result.status, IntegrityStatus.verified);
     expect(result.actualSha256, expected);
   });
 
   test('reports mismatch when the supplied expected hash differs', () async {
-    final result = await verifySha256(file, expectedSha256: List.filled(64, '0').join());
+    final result =
+        await verifySha256(file, expectedSha256: List.filled(64, '0').join());
     expect(result.status, IntegrityStatus.mismatch);
     expect(result.actualSha256, isNotNull);
   });

@@ -18,7 +18,8 @@ class DownloadIntegrityResult {
   final String? message;
 }
 
-bool isValidSha256(String value) => RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(value.trim());
+bool isValidSha256(String value) =>
+    RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(value.trim());
 
 Future<String> sha256File(File file) async {
   final digest = await sha256.bind(file.openRead()).first;
@@ -42,7 +43,8 @@ Future<DownloadIntegrityResult> verifySha256(
   if (!isValidSha256(expected)) {
     return const DownloadIntegrityResult(
       status: IntegrityStatus.unavailable,
-      message: 'Expected SHA-256 must contain exactly 64 hexadecimal characters.',
+      message:
+          'Expected SHA-256 must contain exactly 64 hexadecimal characters.',
     );
   }
   if (!await file.exists()) {

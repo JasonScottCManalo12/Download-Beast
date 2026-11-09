@@ -2,58 +2,53 @@ import 'package:download_beast/segmented_download_plan.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('segmentation threshold is inclusive at exactly 16 MiB', () {
+    expect(isEligibleSegmentedSize(minimumSegmentedDownloadBytes - 1), isFalse);
+    expect(isEligibleSegmentedSize(minimumSegmentedDownloadBytes), isTrue);
+    expect(isEligibleSegmentedSize(minimumSegmentedDownloadBytes + 1), isTrue);
+    expect(isEligibleSegmentedSize(null), isFalse);
+  });
+
   group('planSegments', () {
     test('covers the entire representation with contiguous ranges', () {
-      final ranges = planSegments(totalBytes: 10, segmentSizeBytes: 4);
+      final ranges = planSegments(totalBytes: 10);
 
       expect(ranges, const [
         SegmentRange(start: 0, end: 3),
-        SegmentRange(start: 4, end: 7),
-        SegmentRange(start: 8, end: 9),
+        SegmentRange(start: 4, end: 6),
+        SegmentRange(start: 7, end: 9),
       ]);
-      expect(ranges.map((range) => range.length), [4, 4, 2]);
+      expect(ranges.map((range) => range.length), [4, 3, 3]);
       expect(ranges.first.start, 0);
       expect(ranges.last.end, 9);
     });
 
-    test('creates one range when the file fits in one segment', () {
+    test('uses one range only when three non-empty ranges cannot be formed',
+        () {
       expect(
-        planSegments(totalBytes: 4, segmentSizeBytes: 4),
-        const [SegmentRange(start: 0, end: 3)],
+        planSegments(totalBytes: 2),
+        const [SegmentRange(start: 0, end: 1)],
       );
     });
 
-    test('uses the configured default segment size', () {
-      final ranges = planSegments(
-        totalBytes: defaultSegmentSizeBytes + 1,
-      );
-
-      expect(ranges, [
-        const SegmentRange(start: 0, end: defaultSegmentSizeBytes - 1),
-        const SegmentRange(
-          start: defaultSegmentSizeBytes,
-          end: defaultSegmentSizeBytes,
-        ),
+    test('distributes remainder bytes to the earliest ranges deterministically',
+        () {
+      expect(planSegments(totalBytes: 11), const [
+        SegmentRange(start: 0, end: 3),
+        SegmentRange(start: 4, end: 7),
+        SegmentRange(start: 8, end: 10),
       ]);
     });
 
     test('returns an unmodifiable range list', () {
-      final ranges = planSegments(totalBytes: 2);
+      final ranges = planSegments(totalBytes: 3);
       expect(() => ranges.add(const SegmentRange(start: 2, end: 2)),
           throwsUnsupportedError);
     });
 
-    test('rejects unknown or non-positive lengths and segment sizes', () {
+    test('rejects unknown or non-positive lengths', () {
       expect(() => planSegments(totalBytes: 0), throwsArgumentError);
       expect(() => planSegments(totalBytes: -1), throwsArgumentError);
-      expect(
-        () => planSegments(totalBytes: 10, segmentSizeBytes: 0),
-        throwsArgumentError,
-      );
-      expect(
-        () => planSegments(totalBytes: 10, segmentSizeBytes: -1),
-        throwsArgumentError,
-      );
     });
   });
 
@@ -128,7 +123,8 @@ void main() {
   });
 
   group('isValidRangeProbe', () {
-    test('accepts only a valid one-byte partial response with a strong ETag', () {
+    test('accepts only a valid one-byte partial response with a strong ETag',
+        () {
       expect(
         isValidRangeProbe(
           statusCode: 206,
@@ -159,13 +155,48 @@ void main() {
         int bodyLength,
         String? entityTag,
       })>[
-        (statusCode: 206, contentRange: 'bytes 1-1/100', bodyLength: 1, entityTag: '"v1"'),
-        (statusCode: 206, contentRange: 'bytes 0-1/100', bodyLength: 1, entityTag: '"v1"'),
-        (statusCode: 206, contentRange: 'bytes 0-0/*', bodyLength: 1, entityTag: '"v1"'),
-        (statusCode: 206, contentRange: 'bytes 0-0/100', bodyLength: 0, entityTag: '"v1"'),
-        (statusCode: 206, contentRange: 'bytes 0-0/100', bodyLength: 2, entityTag: '"v1"'),
-        (statusCode: 206, contentRange: 'bytes 0-0/100', bodyLength: 1, entityTag: 'W/"v1"'),
-        (statusCode: 206, contentRange: 'invalid', bodyLength: 1, entityTag: '"v1"'),
+        (
+          statusCode: 206,
+          contentRange: 'bytes 1-1/100',
+          bodyLength: 1,
+          entityTag: '"v1"'
+        ),
+        (
+          statusCode: 206,
+          contentRange: 'bytes 0-1/100',
+          bodyLength: 1,
+          entityTag: '"v1"'
+        ),
+        (
+          statusCode: 206,
+          contentRange: 'bytes 0-0/*',
+          bodyLength: 1,
+          entityTag: '"v1"'
+        ),
+        (
+          statusCode: 206,
+          contentRange: 'bytes 0-0/100',
+          bodyLength: 0,
+          entityTag: '"v1"'
+        ),
+        (
+          statusCode: 206,
+          contentRange: 'bytes 0-0/100',
+          bodyLength: 2,
+          entityTag: '"v1"'
+        ),
+        (
+          statusCode: 206,
+          contentRange: 'bytes 0-0/100',
+          bodyLength: 1,
+          entityTag: 'W/"v1"'
+        ),
+        (
+          statusCode: 206,
+          contentRange: 'invalid',
+          bodyLength: 1,
+          entityTag: '"v1"'
+        ),
       ];
 
       for (final probe in invalidProbes) {

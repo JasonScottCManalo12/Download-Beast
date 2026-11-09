@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 
+import 'download_errors.dart';
 import 'segmented_download_plan.dart';
 
 /// Thrown when the owning DownloadJob asks a segmented transfer to stop.
@@ -18,7 +20,6 @@ Future<void> downloadSegmentedToFile({
   required File destination,
   required int totalBytes,
   required String entityTag,
-  int segmentSizeBytes = defaultSegmentSizeBytes,
   int maxConcurrentSegments = defaultMaxConcurrentSegments,
   bool Function()? shouldAbort,
   void Function(int receivedBytes, int totalBytes)? onProgress,
@@ -42,10 +43,7 @@ Future<void> downloadSegmentedToFile({
     );
   }
 
-  final ranges = planSegments(
-    totalBytes: totalBytes,
-    segmentSizeBytes: segmentSizeBytes,
-  );
+  final ranges = planSegments(totalBytes: totalBytes);
   final parent = await destination.parent.create(recursive: true);
   final workDirectory = await parent.createTemp('.download-beast-segments-');
   final assembled = File(
@@ -71,13 +69,23 @@ Future<void> downloadSegmentedToFile({
         final segmentFile = File(
           '${workDirectory.path}${Platform.pathSeparator}segment-$index.part',
         );
-        final request = await client.getUrl(uri);
+        final request = await client.getUrl(uri).timeout(
+              const Duration(seconds: 15),
+              onTimeout: () => throw const DownloadTimeoutException(
+                DownloadFailureKind.connectionTimeout,
+              ),
+            );
         request.headers
           ..set(HttpHeaders.rangeHeader, 'bytes=${range.start}-${range.end}')
           ..set(HttpHeaders.ifMatchHeader, entityTag)
           ..set(HttpHeaders.acceptEncodingHeader, 'identity');
 
-        final response = await request.close();
+        final response = await request.close().timeout(
+              const Duration(seconds: 30),
+              onTimeout: () => throw const DownloadTimeoutException(
+                DownloadFailureKind.responseHeaderTimeout,
+              ),
+            );
         final parsed = parseContentRange(
           response.headers.value(HttpHeaders.contentRangeHeader),
         );
@@ -102,11 +110,17 @@ Future<void> downloadSegmentedToFile({
         var written = 0;
         try {
           sink = segmentFile.openWrite();
-          await for (final chunk in response) {
+          await for (final chunk in response.timeout(
+            const Duration(seconds: 30),
+            onTimeout: (sink) => sink.addError(const DownloadTimeoutException(
+              DownloadFailureKind.idleBodyTimeout,
+            )),
+          )) {
             checkAborted();
             written += chunk.length;
             if (written > range.length) {
-              throw const HttpException('Segment body exceeded its declared range.');
+              throw const HttpException(
+                  'Segment body exceeded its declared range.');
             }
             sink.add(chunk);
             downloadedBytes += chunk.length;
@@ -136,7 +150,8 @@ Future<void> downloadSegmentedToFile({
     final workerCount = maxConcurrentSegments < ranges.length
         ? maxConcurrentSegments
         : ranges.length;
-    await Future.wait(List<Future<void>>.generate(workerCount, (_) => worker()));
+    await Future.wait(
+        List<Future<void>>.generate(workerCount, (_) => worker()));
     checkAborted();
 
     final output = assembled.openWrite();
@@ -155,7 +170,8 @@ Future<void> downloadSegmentedToFile({
     }
 
     if (await assembled.length() != totalBytes) {
-      throw const HttpException('Assembled file length does not match the representation size.');
+      throw const HttpException(
+          'Assembled file length does not match the representation size.');
     }
 
     File? backup;
@@ -169,7 +185,9 @@ Future<void> downloadSegmentedToFile({
     try {
       await assembled.rename(destination.path);
     } on Object {
-      if (backup != null && await backup.exists() && !await destination.exists()) {
+      if (backup != null &&
+          await backup.exists() &&
+          !await destination.exists()) {
         try {
           await backup.rename(destination.path);
           backup = null;

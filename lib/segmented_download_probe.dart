@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 
+import 'download_errors.dart';
 import 'segmented_download_plan.dart';
 
 /// Result of probing whether an origin safely supports byte-range downloads.
@@ -10,8 +12,7 @@ class RangeProbeResult {
     this.entityTag,
   });
 
-  const RangeProbeResult.unsupported()
-      : this._(supported: false);
+  const RangeProbeResult.unsupported() : this._(supported: false);
 
   const RangeProbeResult.supported({
     required int totalBytes,
@@ -40,15 +41,27 @@ class RangeProbeResult {
 Future<RangeProbeResult> probeRangeSupport(
   HttpClient client,
   Uri uri, {
-  Duration timeout = const Duration(seconds: 10),
+  Duration connectionTimeout = const Duration(seconds: 15),
+  Duration responseHeaderTimeout = const Duration(seconds: 30),
+  Duration idleBodyTimeout = const Duration(seconds: 30),
 }) async {
   HttpClientRequest? request;
   try {
-    request = await client.getUrl(uri).timeout(timeout);
+    request = await client.getUrl(uri).timeout(
+          connectionTimeout,
+          onTimeout: () => throw const DownloadTimeoutException(
+            DownloadFailureKind.connectionTimeout,
+          ),
+        );
     request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
 
-    final response = await request.close().timeout(timeout);
+    final response = await request.close().timeout(
+          responseHeaderTimeout,
+          onTimeout: () => throw const DownloadTimeoutException(
+            DownloadFailureKind.responseHeaderTimeout,
+          ),
+        );
     final parsed = parseContentRange(
       response.headers.value(HttpHeaders.contentRangeHeader),
     );
@@ -64,7 +77,12 @@ Future<RangeProbeResult> probeRangeSupport(
     }
 
     final body = <int>[];
-    await for (final chunk in response.timeout(timeout)) {
+    await for (final chunk in response.timeout(
+      idleBodyTimeout,
+      onTimeout: (sink) => sink.addError(const DownloadTimeoutException(
+        DownloadFailureKind.idleBodyTimeout,
+      )),
+    )) {
       if (body.length + chunk.length > 1) {
         return const RangeProbeResult.unsupported();
       }
@@ -84,6 +102,12 @@ Future<RangeProbeResult> probeRangeSupport(
       totalBytes: parsed.total,
       entityTag: entityTag!.trim(),
     );
+  } on DownloadTimeoutException {
+    request?.abort();
+    rethrow;
+  } on TimeoutException {
+    request?.abort();
+    throw const DownloadTimeoutException(DownloadFailureKind.idleBodyTimeout);
   } catch (_) {
     request?.abort();
     return const RangeProbeResult.unsupported();

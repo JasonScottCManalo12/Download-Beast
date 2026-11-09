@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 /// Human-readable file type labels for common download extensions.
 ///
 /// The label describes the filename extension only; it does not verify the
@@ -59,10 +62,106 @@ String fileTypeLabel(String filename) {
 /// Formats a URI for display without discarding the full URI stored in history.
 String displayDownloadUri(String rawUrl) {
   final uri = Uri.tryParse(rawUrl);
-  if (uri == null || !uri.hasAuthority) return rawUrl;
-  final path = uri.path.isEmpty || uri.path == '/' ? '' : uri.path;
-  final queryMarker = uri.hasQuery ? '?…' : '';
-  return '${uri.host}$path$queryMarker';
+  if (uri == null || !uri.hasAuthority) return '[invalid URL]';
+  return redactDownloadUrl(rawUrl);
+}
+
+const Set<String> sensitiveQueryKeys = {
+  'token',
+  'access_token',
+  'auth',
+  'key',
+  'password',
+  'secret',
+  'signature',
+  'sig',
+};
+
+String redactDownloadUrl(String rawUrl) {
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null || !uri.hasAuthority) return '[invalid URL]';
+  final redactedParts = <String>[];
+  for (final part in uri.query.split('&')) {
+    if (part.isEmpty) continue;
+    final equals = part.indexOf('=');
+    final rawKey = equals < 0 ? part : part.substring(0, equals);
+    final key = Uri.decodeComponent(rawKey.replaceAll('+', ' ')).toLowerCase();
+    final sensitive =
+        sensitiveQueryKeys.contains(key) || key.startsWith('x-amz-');
+    redactedParts.add(sensitive ? '$rawKey=[REDACTED]' : part);
+  }
+  return uri
+      .replace(
+        userInfo: '',
+        query: uri.hasQuery ? redactedParts.join('&') : null,
+      )
+      .toString()
+      .replaceAll('%5BREDACTED%5D', '[REDACTED]')
+      .replaceAll('%5bredacted%5d', '[REDACTED]');
+}
+
+const Set<String> executableExtensions = {
+  '.exe',
+  '.com',
+  '.bat',
+  '.cmd',
+  '.ps1',
+  '.psm1',
+  '.psd1',
+  '.vbs',
+  '.vbe',
+  '.js',
+  '.jse',
+  '.wsf',
+  '.wsh',
+  '.hta',
+  '.scr',
+  '.msi',
+  '.msp',
+  '.mst',
+  '.cpl',
+  '.jar',
+  '.lnk',
+  '.pif',
+  '.reg',
+  '.scf',
+  '.appx',
+  '.msix',
+};
+
+Future<bool> hasPortableExecutableHeader(File file) async {
+  RandomAccessFile? handle;
+  try {
+    final length = await file.length();
+    if (length < 64) return false;
+    handle = await file.open();
+    final dos = await handle.read(64);
+    if (dos.length != 64 || dos[0] != 0x4d || dos[1] != 0x5a) return false;
+    final offset = ByteData.sublistView(Uint8List.fromList(dos))
+        .getUint32(0x3c, Endian.little);
+    if (offset < 64 || offset > length - 4) return false;
+    await handle.setPosition(offset);
+    final signature = await handle.read(4);
+    return signature.length == 4 &&
+        signature[0] == 0x50 &&
+        signature[1] == 0x45 &&
+        signature[2] == 0 &&
+        signature[3] == 0;
+  } on FileSystemException {
+    return false;
+  } finally {
+    await handle?.close();
+  }
+}
+
+Future<bool> needsExecutableWarning(File file) async {
+  final name =
+      file.uri.pathSegments.isEmpty ? file.path : file.uri.pathSegments.last;
+  final extension = name.contains('.')
+      ? name.substring(name.lastIndexOf('.')).toLowerCase()
+      : '';
+  return executableExtensions.contains(extension) ||
+      await hasPortableExecutableHeader(file);
 }
 
 /// Returns the video ID for common YouTube watch, short, embed, and live URLs.

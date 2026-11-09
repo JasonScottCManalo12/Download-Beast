@@ -9,12 +9,26 @@ Future<String?> fetchYoutubeTitle(String rawUrl) async {
   final videoId = youtubeVideoId(rawUrl);
   if (videoId == null) return null;
 
-  final source = Uri.parse(
-    'https://www.youtube.com/oembed?url=${Uri.encodeComponent(rawUrl)}&format=json',
-  );
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+  return fetchYoutubeTitleForVideo(videoId);
+}
+
+Uri canonicalYoutubeMetadataUrl(String videoId) {
+  if (!RegExp(r'^[A-Za-z0-9_-]{6,}$').hasMatch(videoId)) {
+    throw ArgumentError.value(videoId, 'videoId', 'Invalid YouTube video ID.');
+  }
+  return Uri.https('www.youtube.com', '/oembed', {
+    'url': Uri.https('www.youtube.com', '/watch', {'v': videoId}).toString(),
+    'format': 'json',
+  });
+}
+
+Future<String?> fetchYoutubeTitleForVideo(String videoId) async {
+  final source = canonicalYoutubeMetadataUrl(videoId);
+
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
   try {
-    final request = await client.getUrl(source).timeout(const Duration(seconds: 5));
+    final request =
+        await client.getUrl(source).timeout(const Duration(seconds: 5));
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     final response = await request.close().timeout(const Duration(seconds: 5));
     if (response.statusCode != HttpStatus.ok) return null;

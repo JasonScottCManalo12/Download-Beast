@@ -3,9 +3,12 @@
 /// This file does not perform network or filesystem operations. The download
 /// engine must still validate each response body and representation validator
 /// before accepting a segment.
-const int defaultSegmentSizeBytes = 4 * 1024 * 1024;
+const int defaultSegmentWorkerCount = 3;
 const int defaultMaxConcurrentSegments = 3;
-const int minimumSegmentedDownloadBytes = 8 * 1024 * 1024;
+const int minimumSegmentedDownloadBytes = 16 * 1024 * 1024;
+
+bool isEligibleSegmentedSize(int? totalBytes) =>
+    totalBytes != null && totalBytes >= minimumSegmentedDownloadBytes;
 
 /// An inclusive byte range within a known-length representation.
 class SegmentRange {
@@ -34,27 +37,21 @@ class SegmentRange {
 /// Invalid or unknown lengths must use the single-connection download path.
 List<SegmentRange> planSegments({
   required int totalBytes,
-  int segmentSizeBytes = defaultSegmentSizeBytes,
 }) {
   if (totalBytes <= 0) {
     throw ArgumentError.value(totalBytes, 'totalBytes', 'Must be positive.');
   }
-  if (segmentSizeBytes <= 0) {
-    throw ArgumentError.value(
-      segmentSizeBytes,
-      'segmentSizeBytes',
-      'Must be positive.',
-    );
-  }
-
+  final workers =
+      totalBytes >= defaultSegmentWorkerCount ? defaultSegmentWorkerCount : 1;
+  final quotient = totalBytes ~/ workers;
+  final remainder = totalBytes % workers;
   final ranges = <SegmentRange>[];
   var start = 0;
-  while (start < totalBytes) {
-    final remaining = totalBytes - start;
-    final length = remaining < segmentSizeBytes ? remaining : segmentSizeBytes;
-    final end = start + length - 1;
-    ranges.add(SegmentRange(start: start, end: end));
-    start = end + 1;
+  for (var index = 0; index < workers; index++) {
+    final length = quotient + (index < remainder ? 1 : 0);
+    if (length == 0) continue;
+    ranges.add(SegmentRange(start: start, end: start + length - 1));
+    start += length;
   }
   return List<SegmentRange>.unmodifiable(ranges);
 }
@@ -80,8 +77,7 @@ class ParsedContentRange {
 /// reversed ranges, or ranges that extend beyond the representation.
 ParsedContentRange? parseContentRange(String? value) {
   if (value == null) return null;
-  final match =
-      RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(value.trim());
+  final match = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(value.trim());
   if (match == null) return null;
 
   final start = int.tryParse(match.group(1)!);

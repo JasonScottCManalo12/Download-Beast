@@ -1,84 +1,82 @@
 # Download Beast
 
-Download Beast is an early Flutter desktop download-manager project. The first target is Windows; Linux and Android may follow after the core download experience is tested.
+Download Beast is a Windows desktop application for direct HTTP and HTTPS downloads. This branch contains the whole-project rebuild implementation. A passing test suite does not by itself establish release readiness; see the current CI run and Windows smoke-test evidence before distributing a build.
 
-## Current implementation
+## Supported release
 
-- Flutter and Dart application shell
-- URL input with HTTP/HTTPS validation
-- Save-location picker
-- HTTP/HTTPS file download using Dart's `HttpClient`
-- Live byte count and progress indicator when the server provides a content length
-- Cancel active downloads
-- Per-download completed, failed, and cancelled states
-- Automated local-HTTP tests for successful downloads, HTTP 404 handling, and cancellation cleanup
-- Widget tests for the dashboard and rejection of non-HTTP URLs
-- GitHub Actions workflow for analysis, tests, and Windows release builds
-- Windows release package names the main executable `Download Beast.exe` and includes the supporting runtime files
+- Windows 10 version 22H2, build 19045 or later; Windows 11 is also intended to be supported.
+- Minimum application window: 900 × 600 logical pixels.
+- Flutter stable 3.47.5 and Dart 3.13.4. `pubspec.lock` is tracked; use locked dependency resolution.
+- First distribution format: portable ZIP. Signed installers and automatic updates are deferred.
 
-## Milestone checklist
+## Download behavior
 
-- [x] **Core download engine:** HTTP/HTTPS downloads, URL validation, save-location selection, progress, cancellation, and status handling
-- [x] **Automated tests:** successful download and content verification, HTTP 404 handling, cancellation cleanup, and widget validation
-- [x] **Continuous integration:** GitHub Actions analysis, tests, and Windows release build/package upload pass on `main`
-- [x] **Windows release build:** release compilation and artifact upload succeeded
-- [x] **Windows executable packaging in CI:** workflow renames the executable to `Download Beast.exe` and uploads the release folder
-- [x] **Manual Windows verification:** user confirmed the app launches, dashboard displays correctly, and download/cancellation tests are good
-- [x] **Merge verified changes into `main`:** merged via [PR #2](https://github.com/JasonScottCManalo12/Download-Beast/pull/2); merge commit `fcfaff0fd3f7bdb7f3220af36f44bfa0ea13a58a`
-- [x] **Persistent download history (Milestone 8, operational):** SQLite-backed records for URLs, destinations, statuses, progress, errors, and timestamps; restore recent history on startup and mark stale active records interrupted
-- [x] **Milestone 8 usability fixes:** readable source links with copy/open actions, full destination paths, and recognizable file-type labels; unknown extensions remain explicitly unknown
-- [x] **YouTube video identification:** recognize common YouTube video URLs, display the video ID, and resolve the public video title when available; video extraction is not supported yet, so YouTube pages must not be saved as if they were media files
-- [x] **Milestone 9 — Pause/resume downloads:** safely validates HTTP Range/Content-Range and ETag behavior, preserves pause/resume state in SQLite history, and passes automated tests; [issue #5 closed](https://github.com/JasonScottCManalo12/Download-Beast/issues/5), [PR #6 merged](https://github.com/JasonScottCManalo12/Download-Beast/pull/6)
-- [x] **Milestone 10 — Reliable retry and recovery:** explicit user-triggered retry, failed-history retry, safe restart from byte zero, and tests for transient 503, 404, and repeated failures; [issue #7](https://github.com/JasonScottCManalo12/Download-Beast/issues/7), [PR #8](https://github.com/JasonScottCManalo12/Download-Beast/pull/8)
-- [x] **Milestone 11 — Windows release polish and usability:** merged and verified on `main`; [issue #9](https://github.com/JasonScottCManalo12/Download-Beast/issues/9), [PR #10](https://github.com/JasonScottCManalo12/Download-Beast/pull/10)
-- [x] **Milestone 12 — Download integrity and SHA-256 verification:** merged to `main` via [PR #12](https://github.com/JasonScottCManalo12/Download-Beast/pull/12); [issue #11](https://github.com/JasonScottCManalo12/Download-Beast/issues/11)
-- [ ] **Milestone 13 — Safe segmented downloads:** implementation, automated tests, Windows release build, and user-reported Windows smoke tests are complete on the feature branch. Awaiting PR review and successful PR-triggered CI before merge; [issue #13](https://github.com/JasonScottCManalo12/Download-Beast/issues/13), [PR #14](https://github.com/JasonScottCManalo12/Download-Beast/pull/14).
-  - [x] Plan contiguous byte ranges and parse `Content-Range` and strong ETags
-  - [x] Probe server range support and require a valid one-byte `206` response before segmented transfer
-  - [x] Download with at most three workers, pin segments to the same strong ETag, validate every response/body length, and assemble in byte order
-  - [x] Preserve destination data on segment failures and clean temporary segment files
-  - [x] Keep single-connection fallback for unsupported/invalid range servers and existing partial/resumable downloads
-  - [x] Run the existing SHA-256 integrity verification after assembly
-  - [x] Add end-to-end coverage for an 8 MiB+ range-capable download and tests for malformed ranges, ignored ranges, truncated segments, changed ETags, pause/resume, and destination preservation
-  - [x] Add segmented cancellation cleanup and interruption/restart history-recovery tests; both passed in [Workflow #182](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40293360284)
-  - [x] Pass source analysis, automated tests, Windows release build, and artifact upload in [Workflow #182](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40293360284)
-  - [x] Update workflow checkout steps to `actions/checkout@v5`
-  - [x] User reports all 29 Windows smoke-test checklist items passed (manual result is user-reported)
+Paste a direct HTTP/HTTPS file URL, optionally enter an expected SHA-256, choose a destination, and start the task. The expected hash is compared with the downloaded bytes; it does not establish authenticity unless its value came from a trusted source. A mismatch is a terminal integrity failure, and the staged file is discarded. An existing destination is preserved unless you explicitly approve replacement.
 
-Milestone 12 was merged in commit [`0ce549a`](https://github.com/JasonScottCManalo12/Download-Beast/commit/0ce549a556c9353b79578a6b6863e765cf0a9266). Branch CI, Windows package validation, and post-merge CI all passed. [Post-merge Workflow #134](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40259720559) completed successfully on `main`.
+The queue defaults to three simultaneous downloads and allows a persistent setting from one to five. Eligible files of at least 16 MiB use three parallel ranges only when the server proves byte-range support and supplies a strong ETag. Otherwise the app uses one stream. Pausing or restarting a segmented transfer discards its partial segments and starts again from zero. Retry is always manual. Progress shows received bytes and transfer rate; ETA is not provided.
 
-## Not implemented yet
+Timeouts are fixed: 15 seconds to connect, 30 seconds to receive response headers, and 30 seconds without body data. A timed-out attempt fails safely and can be retried manually.
 
-- Milestone 13 segmented downloads are not yet merged into `main`; implementation is under review in [PR #14](https://github.com/JasonScottCManalo12/Download-Beast/pull/14)
-- Automatic retry scheduling (not implemented; Milestone 10 uses explicit user-triggered attempts)
-- Bandwidth limits
-- Browser extension integration
-- Signed installer
+Completed files can be opened or revealed in Explorer. Before opening a file with a potentially executable extension or a valid PE header, the app asks for confirmation. This warning is a precaution, not malware detection or a security scan.
 
-SHA-256 verification compares a downloaded file with a user-supplied expected hash; it cannot establish authenticity unless that expected hash comes from a trusted source. This is an initial development build, not yet a production replacement for Internet Download Manager. Test downloads with files you are authorized to retrieve. Servers may block downloads, require authentication, or omit progress metadata.
+### Status and recovery
 
-## Windows build package
+The task lifecycle is `queued → downloading`; an active task may become `paused`, `failed`, `cancelled`, `completed`, or `integrityFailed`. Paused tasks return to the queue when resumed. Failed or integrity-failed tasks return to the queue only after the user selects Retry. Completed and cancelled tasks are terminal. On application restart, a task recorded as downloading becomes `interrupted` and offers a fresh attempt. A segmented task paused or interrupted begins again at zero; a single-stream task can resume only when its strong ETag and byte range are still valid.
 
-The latest successful feature-branch package is available from [Workflow #182](https://github.com/JasonScottCManalo12/Download-Beast/actions/runs/40293360284). Artifact name: `Download-Beast-Windows`; size: 13,035,700 bytes; SHA-256: `0245c27cc246297aed34f9cbcef931035e5aa84cc1caec5658a78494b77ab05f`. It expires on 2026-11-09 at 08:40:30 UTC. The user reports all 29 Windows smoke-test checklist items passed.
+## History and privacy
 
-Download the `Download-Beast-Windows` artifact from a successful GitHub Actions run. Extract the package, then launch `Download Beast.exe` from the extracted folder. Keep the executable beside its supporting DLLs and `data` directory; do not move the executable out on its own.
+History and locally retained source URLs remain until manually deleted; there is no automatic age-based deletion. Removing a history record also removes its associated locally retained URL from application history. Downloaded files remain on disk unless you separately select file deletion. Clear-all follows the same rule.
 
-Manual Windows verification is user-confirmed complete for Milestones 9 and 10. For Milestone 10, all smoke-test checks were reported passed, including retry success, retry after app restart, non-retryable error messaging, file integrity, and pause/resume/cancellation checks.
+The app may retain full URLs locally for retry and recovery. Ordinary UI summaries and diagnostics redact URL credentials and sensitive query values. Use the explicit copy action to copy a full source URL. Optional YouTube title lookup requires a confirmation dialog and sends only the canonical URL for the selected video to YouTube's metadata endpoint. Direct YouTube media extraction is unsupported. The application does not claim secure erasure or encryption at rest.
+
+## Portable Windows package
+
+Download the `Download-Beast-Windows` artifact from a successful Windows build workflow. Keep the executable beside its DLLs and `data` directory. Verify the ZIP with its adjacent `.sha256` sidecar before extracting. Extract the ZIP to a writable folder and launch `Download Beast.exe`.
+
+The package contains a build manifest with commit and Flutter/Dart versions, plus third-party license notices. CI artifact upload is not a public release publication. Windows 10/11 interactive smoke checks must be recorded separately; CI build success alone is not a launch or filesystem-safety claim.
 
 ## Development
 
-Requires Flutter stable with Windows desktop support and Visual Studio's C++ desktop build tools. The Windows runner scaffold is generated in CI; run the first command below once after cloning to generate it locally.
+Install Flutter stable 3.47.5, Dart 3.13.4 and Visual Studio 2022 with the Desktop development with C++ workload. Windows builds also require CMake and MSBuild from Visual Studio. From a clean checkout:
 
 ```powershell
-flutter create --platforms=windows .
-flutter pub get
+flutter --version
+flutter pub get --enforce-lockfile
 flutter analyze
 flutter test
 flutter run -d windows
+flutter build windows --release
 ```
 
-The GitHub Actions workflow generates the Windows runner scaffolding during CI, then analyzes, tests, builds the release app, renames the main executable, and uploads the release folder as an artifact.
+The Windows runner is checked in. If creating a fresh platform scaffold in a separate checkout, use `flutter create --platforms=windows --project-name download_beast .` and review generated files before use. Do not run dependency resolution without the tracked lockfile enforcement for release validation.
 
-## Branch review
+## Architecture and testing
 
-`feature/fix-cancellation-test` is a stale branch 44 commits behind `main` with two unique commits that only adjust the historical cancellation test's timing/chunk handling. It was reviewed and intentionally left untouched; do not merge it wholesale. The current `main` is the baseline for new work. Other milestone feature branches correspond to already-merged milestones and are retained for now; no branches were deleted.
+- `lib/main.dart`: presentation and composition root.
+- `lib/download_job.dart`, `download_scheduler.dart`: task lifecycle and concurrency.
+- `lib/segmented_download_*.dart`: range planning, probe and segmented transfer.
+- `lib/download_history.dart`: SQLite storage, migration and history queries.
+- `lib/download_integrity.dart`, `file_identity.dart`: hashing, URL redaction and executable-file checks.
+- `lib/windows_file_ops.dart` and `windows/runner`: Windows filesystem identity, safe replacement, opening and Explorer integration.
+
+Automated tests use local HTTP servers and temporary SQLite/filesystem data for core behavior. Windows-specific picker, Explorer, replacement, restart and portable-package smoke checks must be run on Windows; Linux test success is not a substitute. The app closes active work and waits for queued persistence before closing its database.
+
+## Troubleshooting
+
+- **Connection/header/body timeout:** the attempt is failed with the timeout phase. The partial stage is removed when possible; if cleanup fails, the error includes the path. Retry manually after checking the connection or destination.
+- **HTTP or protocol error:** inspect the status and user-safe error text, then retry manually if appropriate. No automatic retry loop runs.
+- **Integrity failure:** the staged bytes did not match the supplied SHA-256. They are not installed as the completed destination. Confirm the expected hash from a trusted source before retrying.
+- **Destination replacement error or locked file:** the original is preserved. The error reports the staged path and, when present, the backup path. Close other programs holding the file before retrying.
+- **Interrupted item:** the application closed while a transfer was active. Start a fresh attempt; segmented bytes are discarded. A paused single-stream item may retain a stage, but resume still requires a matching strong validator and valid server range response.
+- **Completed file unavailable:** the destination may have been moved or deleted outside the app. Use Reveal or retry to create a new file.
+- **History storage warning:** the current download can continue, but the record may not be saved. Check that the app support folder is writable and relaunch before relying on history recovery.
+
+## Validation and CI
+
+From the repository root, the required local checks are locked dependency resolution, `flutter analyze`, `flutter test`, and `flutter build windows --release`. CI runs analysis and tests on Ubuntu, then builds Windows only if those checks pass. Its packaging step verifies the executable, DLLs, Flutter `data`, third-party notices, manifest commit/toolchain versions, and external ZIP SHA-256 before uploading an artifact. Artifact upload is not a public release. The workflow does not sign packages or publish GitHub releases.
+
+The implementation is maintained as one assignment with internal subsystem checkpoints. For a failing blocker, a repair cycle records diagnostics, identifies one cause, makes a scoped correction, and reruns the affected check plus required regression checks. Stop after three unsuccessful cycles for the same blocker. Do not suppress tests or weaken acceptance criteria to obtain a green result.
+
+## Current verification status
+
+The original 65-test baseline was recorded at the approved starting commit. It documents the old implementation only. The rebuild's analysis, tests, Windows release build, package checksum and interactive Windows 10/11 smoke checks are reported only after those checks have actually run for this branch. Historical milestone statements and user-reported smoke checks from earlier project versions are not evidence for this rebuild.

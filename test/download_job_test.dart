@@ -4,31 +4,84 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:download_beast/download_job.dart';
+import 'package:download_beast/download_state.dart';
+import 'package:download_beast/download_errors.dart';
+import 'package:download_beast/windows_file_ops.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final _rangePayload = List<int>.generate(256 * 1024, (index) => index % 251);
 final _segmentedPayload =
-    List<int>.generate(8 * 1024 * 1024 + 123, (index) => index % 239);
+    List<int>.generate(16 * 1024 * 1024 + 123, (index) => index % 239);
 
 void main() {
+  setUpAll(() {
+    WindowsFileOperations.installForTesting(const FileSystemFileOperations());
+  });
+  tearDownAll(() {
+    WindowsFileOperations.resetAdapter();
+  });
+
   late HttpServer server;
   late Directory tempDirectory;
   late Completer<void> slowResponseFlushed;
   final heldResponses = <Completer<void>>[];
   final rangeRequestHeaders = <String>[];
+  final segmentedRangeHeaders = <String>[];
+  late Completer<void> segmentedBodyStarted;
+  late Completer<void> releaseSegmentedBody;
+  var holdSegmentedBody = false;
   var flakyRouteCount = 0;
   var missingRouteCount = 0;
 
   setUp(() async {
-    tempDirectory = await Directory.systemTemp.createTemp('download_beast_test_');
+    tempDirectory =
+        await Directory.systemTemp.createTemp('download_beast_test_');
     slowResponseFlushed = Completer<void>();
+    segmentedBodyStarted = Completer<void>();
+    releaseSegmentedBody = Completer<void>();
+    holdSegmentedBody = false;
     rangeRequestHeaders.clear();
+    segmentedRangeHeaders.clear();
     flakyRouteCount = 0;
     missingRouteCount = 0;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
-      if (request.uri.path == '/segmented-payload') {
+      if (request.method == 'HEAD') {
+        final path = request.uri.path;
+        final length =
+            path == '/segmented-payload' || path == '/segmented-pause'
+                ? _segmentedPayload.length
+                : (path == '/range-payload' ||
+                        path == '/below-threshold' ||
+                        path == '/ignore-range' ||
+                        path == '/bad-range' ||
+                        path == '/changed-etag')
+                    ? _rangePayload.length
+                    : utf8.encode('Download Beast test payload').length;
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.set(
+              HttpHeaders.etagHeader,
+              path == '/segmented-payload' || path == '/segmented-pause'
+                  ? '"segmented-v1"'
+                  : '"fixture-v1"')
+          ..contentLength = length;
+        await request.response.close();
+        return;
+      }
+      if (request.uri.path == '/segmented-payload' ||
+          request.uri.path == '/segmented-pause') {
+        final isPauseFixture = request.uri.path == '/segmented-pause';
+        if (request.method == 'HEAD') {
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..headers.set(HttpHeaders.etagHeader, '"segmented-v1"')
+            ..contentLength = _segmentedPayload.length;
+          await request.response.close();
+          return;
+        }
         final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+        segmentedRangeHeaders.add(rangeHeader ?? '');
         final match = rangeHeader == null
             ? null
             : RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
@@ -54,11 +107,25 @@ void main() {
           )
           ..contentLength = end - start + 1;
         request.response.add(_segmentedPayload.sublist(start, end + 1));
-        await request.response.close();
+        await request.response.flush();
+        if (isPauseFixture && holdSegmentedBody && rangeHeader != 'bytes=0-0') {
+          if (!segmentedBodyStarted.isCompleted) {
+            segmentedBodyStarted.complete();
+          }
+          await releaseSegmentedBody.future;
+        }
+        try {
+          await request.response.close();
+        } on HttpException {
+          // Pausing closes the client's in-flight range request.
+        } on SocketException {
+          // Pausing closes the client's in-flight range request.
+        }
         return;
       }
 
       if (request.uri.path == '/range-payload' ||
+          request.uri.path == '/below-threshold' ||
           request.uri.path == '/ignore-range' ||
           request.uri.path == '/bad-range' ||
           request.uri.path == '/changed-etag') {
@@ -69,7 +136,8 @@ void main() {
         var endInclusive = _rangePayload.length - 1;
         var isRangeRequest = false;
         if (honorRange && rangeHeader != null) {
-          final closedRange = RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
+          final closedRange =
+              RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(rangeHeader);
           final openRange = RegExp(r'^bytes=(\d+)-$').firstMatch(rangeHeader);
           if (closedRange != null) {
             start = int.parse(closedRange.group(1)!);
@@ -109,13 +177,14 @@ void main() {
         request.response.contentLength = bytes.length;
         request.response.bufferOutput = false;
         for (var offset = 0; offset < bytes.length; offset += 8192) {
-          final chunkEnd = offset + 8192 < bytes.length
-              ? offset + 8192
-              : bytes.length;
+          final chunkEnd =
+              offset + 8192 < bytes.length ? offset + 8192 : bytes.length;
           request.response.add(bytes.sublist(offset, chunkEnd));
           await request.response.flush();
           // Hold only the first ordinary full download, never the 0-0 probe.
-          if (rangeHeader == null && offset == 0) {
+          if (request.uri.path == '/range-payload' &&
+              rangeHeader == null &&
+              offset == 0) {
             final hold = Completer<void>();
             heldResponses.add(hold);
             await hold.future;
@@ -212,7 +281,8 @@ void main() {
   Uri url(String path) =>
       Uri.parse('http://${server.address.address}:${server.port}$path');
 
-  test('uses segmented download for a large strong-ETag range-capable file', () async {
+  test('uses segmented download for a large strong-ETag range-capable file',
+      () async {
     final destination = '${tempDirectory.path}/segmented-payload.bin';
     final progressValues = <int>[];
     late final DownloadJob job;
@@ -224,7 +294,7 @@ void main() {
 
     await job.start().timeout(const Duration(seconds: 30));
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
     expect(job.totalBytes, _segmentedPayload.length);
     expect(job.receivedBytes, _segmentedPayload.length);
     expect(job.progress, 1.0);
@@ -232,7 +302,76 @@ void main() {
     expect(await File(destination).readAsBytes(), _segmentedPayload);
   });
 
-  test('pause preserves partial bytes and resume completes with HTTP Range', () async {
+  test('segmented pause discards progress and resumes from byte zero',
+      () async {
+    holdSegmentedBody = true;
+    final destination = '${tempDirectory.path}/segmented-pause.bin';
+    final progressReceived = Completer<void>();
+    late final DownloadJob job;
+    job = DownloadJob(
+      url: url('/segmented-pause'),
+      destinationPath: destination,
+      onChanged: () {
+        if (job.receivedBytes > 0 && !progressReceived.isCompleted) {
+          progressReceived.complete();
+        }
+      },
+    );
+
+    final firstRun = job.start();
+    await segmentedBodyStarted.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw StateError('No segmented body request arrived.'),
+    );
+    await progressReceived.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw StateError('No segmented progress arrived.'),
+    );
+    final pause = job.pause();
+    holdSegmentedBody = false;
+    if (!releaseSegmentedBody.isCompleted) releaseSegmentedBody.complete();
+    await pause.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw StateError('Segmented pause did not settle.'),
+    );
+    await firstRun.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw StateError('Segmented transfer did not stop.'),
+    );
+    expect(job.status, DownloadStatus.paused);
+    expect(job.receivedBytes, 0);
+    expect(await File(job.currentStagingPath).exists(), isFalse);
+    expect(
+      tempDirectory
+          .listSync()
+          .where((entry) => entry.path.contains('.download-beast-segments-')),
+      isEmpty,
+    );
+
+    await job.resume().timeout(const Duration(seconds: 30));
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
+    expect(job.receivedBytes, _segmentedPayload.length);
+    expect(await File(destination).readAsBytes(), _segmentedPayload);
+    expect(
+        segmentedRangeHeaders.where((header) => header == 'bytes=0-0').length,
+        2);
+  });
+
+  test('does not send a range probe below the 16 MiB threshold', () async {
+    final destination = '${tempDirectory.path}/below-threshold.bin';
+    final job = DownloadJob(
+      url: url('/below-threshold'),
+      destinationPath: destination,
+      onChanged: () {},
+    );
+    await job.start();
+    expect(job.status, DownloadStatus.completed);
+    expect(rangeRequestHeaders, isNot(contains('bytes=0-0')));
+  });
+
+  test(
+      'pause preserves staged single-stream bytes and resume validates HTTP Range',
+      () async {
     final destination = '${tempDirectory.path}/range-payload.bin';
     final firstChunkReceived = Completer<void>();
     late final DownloadJob job;
@@ -252,8 +391,9 @@ void main() {
     await initialRun.timeout(const Duration(seconds: 10));
 
     expect(job.status, DownloadStatus.paused);
-    expect(await File(destination).exists(), isTrue);
-    final savedBytes = await File(destination).length();
+    expect(await File(destination).exists(), isFalse);
+    expect(await File(job.currentStagingPath).exists(), isTrue);
+    final savedBytes = await File(job.currentStagingPath).length();
     expect(savedBytes, greaterThan(0));
     expect(savedBytes, lessThan(job.totalBytes));
 
@@ -262,7 +402,7 @@ void main() {
     }
     await job.resume().timeout(const Duration(seconds: 10));
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
     expect(await File(destination).readAsBytes(), _rangePayload);
     expect(rangeRequestHeaders, contains('bytes=$savedBytes-'));
   });
@@ -292,11 +432,12 @@ void main() {
     }
     await job.resume().timeout(const Duration(seconds: 10));
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
     expect(await File(destination).readAsBytes(), _rangePayload);
   });
 
-  test('rejects a mismatched Content-Range without preserving corrupted output', () async {
+  test('rejects a mismatched Content-Range without preserving corrupted output',
+      () async {
     final destination = '${tempDirectory.path}/bad-range.bin';
     final firstChunkReceived = Completer<void>();
     late final DownloadJob job;
@@ -360,9 +501,11 @@ void main() {
 
     await job.start();
 
-    expect(job.status, DownloadStatus.completed);
-    expect(await File(destination).readAsString(), 'Download Beast test payload');
-    expect(job.receivedBytes, utf8.encode('Download Beast test payload').length);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
+    expect(
+        await File(destination).readAsString(), 'Download Beast test payload');
+    expect(
+        job.receivedBytes, utf8.encode('Download Beast test payload').length);
     expect(job.totalBytes, job.receivedBytes);
     expect(job.progress, 1.0);
     expect(changeCount, greaterThan(0));
@@ -383,7 +526,8 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
-  test('reports a useful network error when the server is unreachable', () async {
+  test('reports a useful network error when the server is unreachable',
+      () async {
     final unusedServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final port = unusedServer.port;
     await unusedServer.close(force: true);
@@ -466,7 +610,9 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
-  test('does not retry a transient server failure until the user requests retry', () async {
+  test(
+      'does not retry a transient server failure until the user requests retry',
+      () async {
     final destination = '${tempDirectory.path}/retry.txt';
     final job = DownloadJob(
       url: url('/flaky'),
@@ -483,7 +629,7 @@ void main() {
 
     await job.retry();
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
     expect(flakyRouteCount, 2);
     expect(await File(destination).readAsString(), 'Recovered after retry');
   });
@@ -504,7 +650,9 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
-  test('retry after repeated transient failures requires one explicit action per attempt', () async {
+  test(
+      'retry after repeated transient failures requires one explicit action per attempt',
+      () async {
     final destination = '${tempDirectory.path}/retry-once.txt';
     final job = DownloadJob(
       url: url('/always-unavailable'),
@@ -522,7 +670,8 @@ void main() {
     expect(await File(destination).exists(), isFalse);
   });
 
-  test('reports verified SHA-256 when expected hash matches downloaded bytes', () async {
+  test('reports verified SHA-256 when expected hash matches downloaded bytes',
+      () async {
     const payload = 'Download Beast test payload';
     final expected = sha256.convert(utf8.encode(payload)).toString();
     final destination = '${tempDirectory.path}/verified.txt';
@@ -535,14 +684,14 @@ void main() {
 
     await job.start();
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
     expect(job.integrityStatus, 'verified');
     expect(job.actualSha256, expected);
     expect(job.integrityCheckedAt, isNotNull);
     expect(await File(destination).readAsString(), payload);
   });
 
-  test('reports hash mismatch without deleting the completed file', () async {
+  test('reports a terminal hash mismatch and discards staged data', () async {
     final destination = '${tempDirectory.path}/mismatch.txt';
     final job = DownloadJob(
       url: url('/payload'),
@@ -553,14 +702,16 @@ void main() {
 
     await job.start();
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.integrityFailed);
     expect(job.integrityStatus, 'mismatch');
     expect(job.actualSha256, isNotNull);
     expect(job.errorMessage, contains('does not match'));
-    expect(await File(destination).exists(), isTrue);
+    expect(await File(destination).exists(), isFalse);
+    expect(await File(job.currentStagingPath).exists(), isFalse);
   });
 
-  test('does not claim hash verification when no expected hash is supplied', () async {
+  test('does not claim hash verification when no expected hash is supplied',
+      () async {
     final destination = '${tempDirectory.path}/unchecked.txt';
     final job = DownloadJob(
       url: url('/payload'),
@@ -570,12 +721,13 @@ void main() {
 
     await job.start();
 
-    expect(job.status, DownloadStatus.completed);
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
     expect(job.integrityStatus, 'notChecked');
     expect(job.actualSha256, isNull);
   });
 
-  test('rejects an incomplete response whose advertised length is not received', () async {
+  test('rejects an incomplete response whose advertised length is not received',
+      () async {
     final destination = '${tempDirectory.path}/incomplete.txt';
     final job = DownloadJob(
       url: url('/short-length'),
@@ -588,4 +740,175 @@ void main() {
     expect(job.status, DownloadStatus.failed);
     expect(await File(destination).exists(), isFalse);
   });
+
+  test('each timeout fails safely and remains available for manual retry',
+      () async {
+    for (final phase in [
+      DownloadFailureKind.connectionTimeout,
+      DownloadFailureKind.responseHeaderTimeout,
+      DownloadFailureKind.idleBodyTimeout,
+    ]) {
+      final destination = '${tempDirectory.path}/${phase.name}.txt';
+      final original = File(destination);
+      await original.writeAsString('original bytes');
+      var injected = false;
+      final job = DownloadJob(
+        url: url('/payload'),
+        destinationPath: destination,
+        onChanged: () {},
+        confirmOverwrite: (_) async => true,
+        timeoutPhaseHook: (actual) {
+          if (!injected && actual == phase) {
+            injected = true;
+            throw DownloadTimeoutException(phase);
+          }
+        },
+      );
+      await job.start();
+      expect(job.status, DownloadStatus.failed, reason: phase.name);
+      expect(job.failureKind, phase, reason: phase.name);
+      final expectedMessage = switch (phase) {
+        DownloadFailureKind.connectionTimeout =>
+          'Connection timed out after 15 seconds.',
+        DownloadFailureKind.responseHeaderTimeout =>
+          'The server did not send response headers within 30 seconds.',
+        DownloadFailureKind.idleBodyTimeout =>
+          'The download stalled for 30 seconds without receiving data.',
+        _ => fail('Unexpected timeout phase: ${phase.name}'),
+      };
+      expect(job.errorMessage, expectedMessage, reason: phase.name);
+      expect(await original.readAsString(), 'original bytes',
+          reason: phase.name);
+      expect(await File(job.currentStagingPath).exists(), isFalse,
+          reason: phase.name);
+
+      await job.retry();
+      expect(job.status, DownloadStatus.completed, reason: phase.name);
+      expect(await File(destination).readAsString(),
+          'Download Beast test payload');
+    }
+  });
+
+  test('refuses to overwrite an existing destination without confirmation',
+      () async {
+    final destination = File('${tempDirectory.path}/keep.bin');
+    await destination.writeAsString('original');
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination.path,
+      onChanged: () {},
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.cancelled);
+    expect(await destination.readAsString(), 'original');
+  });
+
+  test('replaces an existing destination only after confirmation', () async {
+    final destination = File('${tempDirectory.path}/replace.bin');
+    await destination.writeAsString('original');
+    var confirmations = 0;
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination.path,
+      onChanged: () {},
+      confirmOverwrite: (_) async {
+        confirmations++;
+        return true;
+      },
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed);
+    expect(confirmations, 1);
+    expect(await destination.readAsString(), 'Download Beast test payload');
+    expect(
+        tempDirectory
+            .listSync()
+            .where((entry) => entry.path.contains('backup')),
+        isEmpty);
+  });
+
+  test('reconfirms when an existing destination changes after approval',
+      () async {
+    final destination = File('${tempDirectory.path}/changed-after-prompt.bin');
+    await destination.writeAsString('original');
+    final originalModified = (await destination.stat()).modified;
+    var confirmations = 0;
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination.path,
+      onChanged: () {},
+      confirmOverwrite: (_) async {
+        confirmations++;
+        if (confirmations == 1) {
+          await destination.writeAsString('modified');
+          await destination.setLastModified(originalModified);
+        }
+        return true;
+      },
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
+    expect(confirmations, 2);
+    expect(await destination.readAsString(), 'Download Beast test payload');
+  });
+
+  test(
+      'replacement failure preserves the original and leaves a recoverable stage',
+      () async {
+    addTearDown(() => WindowsFileOperations.installForTesting(
+        const FileSystemFileOperations()));
+    final destination = File('${tempDirectory.path}/locked-target.bin');
+    await destination.writeAsString('original');
+    WindowsFileOperations.installForTesting(const _FailingReplaceOperations());
+    final job = DownloadJob(
+      url: url('/payload'),
+      destinationPath: destination.path,
+      onChanged: () {},
+      confirmOverwrite: (_) async => true,
+    );
+
+    await job.start();
+
+    expect(job.status, DownloadStatus.failed);
+    expect(await destination.readAsString(), 'original');
+    expect(await File(job.currentStagingPath).exists(), isTrue);
+    expect(job.errorMessage, contains(job.currentStagingPath));
+
+    WindowsFileOperations.installForTesting(const FileSystemFileOperations());
+    await job.retry();
+    expect(job.status, DownloadStatus.completed, reason: job.errorMessage);
+    expect(await destination.readAsString(), 'Download Beast test payload');
+  });
+}
+
+class _FailingReplaceOperations implements FileOperationsAdapter {
+  const _FailingReplaceOperations();
+
+  final FileSystemFileOperations _fallback = const FileSystemFileOperations();
+
+  @override
+  Future<String?> identity(File file) => _fallback.identity(file);
+
+  @override
+  Future<void> replace({
+    required File source,
+    required File destination,
+    required bool destinationExists,
+    required File backup,
+    String? expectedIdentity,
+  }) async {
+    throw FileSystemException('Destination is locked.', destination.path);
+  }
+
+  @override
+  Future<void> open(File file) => _fallback.open(file);
+
+  @override
+  Future<void> reveal(File file) => _fallback.reveal(file);
 }

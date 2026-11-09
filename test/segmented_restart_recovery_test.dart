@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:download_beast/download_history.dart';
+import 'package:download_beast/download_state.dart';
 import 'package:download_beast/segmented_download_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -69,7 +70,6 @@ void main() {
           destination: destination,
           totalBytes: payload.length,
           entityTag: '"restart-fixture-v1"',
-          segmentSizeBytes: 8,
           maxConcurrentSegments: 1,
           shouldAbort: () => interrupted,
           onProgress: (received, total) {
@@ -80,7 +80,7 @@ void main() {
         throwsA(isA<SegmentedDownloadAborted>()),
       );
 
-      expect(receivedBytes, 8);
+      expect(receivedBytes, 22);
       expect(await destination.exists(), isFalse);
       expect(
         tempDirectory
@@ -93,9 +93,10 @@ void main() {
       final now = DateTime.now();
       final id = await store.insert(
         DownloadHistoryRecord(
-          url: 'http://${InternetAddress.loopbackIPv4.address}:${server.port}/payload',
+          url:
+              'http://${InternetAddress.loopbackIPv4.address}:${server.port}/payload',
           destinationPath: destination.path,
-          status: 'downloading',
+          status: DownloadStatus.downloading,
           receivedBytes: receivedBytes,
           totalBytes: payload.length,
           etag: '"restart-fixture-v1"',
@@ -110,15 +111,15 @@ void main() {
       addTearDown(store.close);
       expect(await store.markActiveDownloadsInterrupted(), 1);
 
-      final recovered = (await store.listRecent())
-          .singleWhere((record) => record.id == id);
-      expect(recovered.status, 'interrupted');
-      expect(recovered.receivedBytes, 8);
+      final recovered =
+          (await store.listRecent()).singleWhere((record) => record.id == id);
+      expect(recovered.status, DownloadStatus.interrupted);
+      expect(recovered.receivedBytes, 0);
       expect(recovered.totalBytes, payload.length);
       expect(recovered.etag, '"restart-fixture-v1"');
       expect(
         recovered.errorMessage,
-        'App closed before the download finished.',
+        'App closed before the download finished; retry starts safely.',
       );
       expect(recovered.integrityStatus, 'notChecked');
     },
