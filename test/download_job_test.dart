@@ -182,7 +182,12 @@ void main() {
           request.response.add(bytes.sublist(offset, chunkEnd));
           await request.response.flush();
           // Hold only the first ordinary full download, never the 0-0 probe.
-          if (request.uri.path == '/range-payload' &&
+          if ([
+                '/range-payload',
+                '/ignore-range',
+                '/bad-range',
+                '/changed-etag',
+              ].contains(request.uri.path) &&
               rangeHeader == null &&
               offset == 0) {
             final hold = Completer<void>();
