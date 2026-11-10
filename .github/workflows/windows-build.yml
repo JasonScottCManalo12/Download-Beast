@@ -81,6 +81,11 @@ jobs:
             -OutputDirectory "build/package" `
             -FlutterRoot $env:FLUTTER_ROOT
 
+      - name: Independently verify package and checksum
+        shell: pwsh
+        run: |
+          & ./tool/verify_windows_package.ps1 -PackageDirectory "build/package"
+
       - name: Upload validated Windows package artifact
         uses: actions/upload-artifact@v4
         with:
